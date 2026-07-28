@@ -1,0 +1,8 @@
+# VSCode
+.vscode/
+
+# Cursor
+.cursor/
+
+# .env
+.env
