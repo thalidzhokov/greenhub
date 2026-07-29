@@ -96,7 +96,9 @@ def existing_commits(repo: str) -> Counter[date]:
 
 def make_commit(repo: str, langs: list[str], day: date, index: int) -> None:
     filename, comment, code = LANGUAGES[random.choice(langs)]
-    body = f"{code}\n{comment} seed: {random.getrandbits(64):016x}\n"
+    # префикс выравнивается до 2 символов ("# " и "//"), чтобы файлы всех
+    # языков были байт-в-байт одного размера
+    body = f"{code}\n{comment:2} seed: {random.getrandbits(64):016x}\n"
     Path(repo, filename).write_text(body, encoding="utf-8", newline="\n")
     stamp = (datetime.combine(day, time(12, 0)) + timedelta(minutes=index)).isoformat()
     git(repo, "add", "-A")
