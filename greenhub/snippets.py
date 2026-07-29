@@ -1,37 +1,37 @@
-"""Сниппеты кода для генерируемых коммитов: язык -> (файл, префикс комментария, код).
+"""Сниппеты кода для генерируемых коммитов: язык -> (расширение, префикс комментария, код).
 
-Код лежит в snippets/example.<ext>, где ext совпадает с расширением целевого файла.
+Код лежит в snippets/example.<ext>.
 """
 
 from pathlib import Path
 
 SNIPPETS_DIR = Path(__file__).resolve().parent.parent / "snippets"
 
-# язык -> (имя файла в целевом репо, префикс комментария)
+# язык -> (расширение файла, префикс комментария)
 _META: dict[str, tuple[str, str]] = {
-    "c": ("main.c", "//"),
-    "c++": ("main.cpp", "//"),
-    "c#": ("Program.cs", "//"),
-    "go": ("main.go", "//"),
-    "java": ("Main.java", "//"),
-    "javascript": ("index.js", "//"),
-    "kotlin": ("Main.kt", "//"),
-    "php": ("index.php", "//"),
-    "python": ("main.py", "#"),
-    "ruby": ("main.rb", "#"),
-    "rust": ("main.rs", "//"),
-    "scala": ("Main.scala", "//"),
-    "swift": ("main.swift", "//"),
-    "typescript": ("index.ts", "//"),
+    "c": ("c", "//"),
+    "c++": ("cpp", "//"),
+    "c#": ("cs", "//"),
+    "go": ("go", "//"),
+    "java": ("java", "//"),
+    "javascript": ("js", "//"),
+    "kotlin": ("kt", "//"),
+    "php": ("php", "//"),
+    "python": ("py", "#"),
+    "ruby": ("rb", "#"),
+    "rust": ("rs", "//"),
+    "scala": ("scala", "//"),
+    "swift": ("swift", "//"),
+    "typescript": ("ts", "//"),
 }
 
 LANGUAGES: dict[str, tuple[str, str, str]] = {
     lang: (
-        filename,
+        ext,
         comment,
-        (SNIPPETS_DIR / f"example{Path(filename).suffix}").read_text(encoding="utf-8"),
+        (SNIPPETS_DIR / f"example.{ext}").read_text(encoding="utf-8"),
     )
-    for lang, (filename, comment) in _META.items()
+    for lang, (ext, comment) in _META.items()
 }
 
 # Сниппеты дополнены комментариями до одинакового размера, чтобы все языки

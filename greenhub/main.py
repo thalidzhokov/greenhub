@@ -98,11 +98,21 @@ def existing_commits(repo: str) -> Counter[date]:
     return Counter(date.fromisoformat(line) for line in result.stdout.split())
 
 
-def make_commit(repo: str, langs: list[str], day: date, index: int) -> None:
-    filename, comment, code = LANGUAGES[random.choice(langs)]
+def file_counts(repo: str, langs: list[str]) -> dict[str, int]:
+    """Сколько файлов каждого языка уже накоплено в целевом репо."""
+    return {
+        lang: len(list(Path(repo, LANGUAGES[lang][0]).glob("example_*")))
+        for lang in langs
+    }
+
+
+def make_commit(repo: str, lang: str, day: date, index: int, file_index: int) -> None:
+    ext, comment, code = LANGUAGES[lang]
     # префикс выравнивается до 2 символов ("# " и "//"), чтобы файлы всех
     # языков были байт-в-байт одного размера
     body = f"{code}\n{comment:2} seed: {random.getrandbits(64):016x}\n"
+    filename = f"{ext}/example_{file_index:05d}.{ext}"
+    Path(repo, ext).mkdir(exist_ok=True)
     Path(repo, filename).write_text(body, encoding="utf-8", newline="\n")
     stamp = (datetime.combine(day, time(12, 0)) + timedelta(minutes=index)).isoformat()
     git(repo, "add", "-A")
@@ -111,7 +121,7 @@ def make_commit(repo: str, langs: list[str], day: date, index: int) -> None:
         "commit",
         "-q",
         "-m",
-        f"Update {filename}",
+        f"Add {filename}",
         extra_env={"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
     )
 
@@ -147,6 +157,7 @@ def main() -> None:
 
     configure_git_user(repo, get_env("GH_TOKEN"))
     existing = existing_commits(repo)
+    counts = file_counts(repo, langs)
 
     created = 0
     unpushed = 0
@@ -155,7 +166,10 @@ def main() -> None:
         if need <= 0:
             continue
         for i in range(need):
-            make_commit(repo, langs, day, existing[day] + i)
+            # наименее заполненный язык — чтобы веса языков оставались равными
+            lang = min(langs, key=lambda l: (counts[l], random.random()))
+            counts[lang] += 1
+            make_commit(repo, lang, day, existing[day] + i, counts[lang])
             unpushed += 1
             if unpushed == PUSH_BATCH:
                 git(repo, "push", "origin", "HEAD")
