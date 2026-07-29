@@ -1,0 +1,12 @@
+services:
+  greenhub:
+    build:
+      context: .
+      dockerfile: greenhub/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - repo:/repo
+
+volumes:
+  repo:
