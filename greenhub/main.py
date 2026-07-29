@@ -66,7 +66,8 @@ def configure_git_user(repo: str, token: str) -> None:
 
 def text_targets(text: str, start: date, commits_per_cell: int) -> dict[date, int]:
     """Накладывает маску текста на календарь, начиная с недели даты start."""
-    week_start = start - timedelta(days=(start.weekday() + 1) % 7)  # к воскресенью
+    # вперёд к ближайшему воскресенью (началу колонки таймлайна)
+    week_start = start + timedelta(days=(7 - (start.weekday() + 1) % 7) % 7)
     columns = render_text(text, load_font(GLYPHS_PATH))
     if len(columns) > MAX_WEEKS:
         print(f"Текст шире {MAX_WEEKS} недель ({len(columns)}), лишнее обрезано")
