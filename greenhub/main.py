@@ -16,6 +16,9 @@ from snippets import LANGUAGES
 
 GLYPHS_PATH = Path(__file__).resolve().parent.parent / "glyphs.txt"
 MAX_WEEKS = 52  # ширина таймлайна
+# GitHub индексирует для графа контрибуций не более ~1000 коммитов за один пуш,
+# лишние теряются безвозвратно — пушим партиями с запасом
+PUSH_BATCH = 500
 
 
 def get_env(name: str) -> str:
@@ -145,17 +148,23 @@ def main() -> None:
     existing = existing_commits(repo)
 
     created = 0
+    unpushed = 0
     for day in sorted(targets):
         need = targets[day] - existing[day]
         if need <= 0:
             continue
         for i in range(need):
             make_commit(repo, langs, day, existing[day] + i)
+            unpushed += 1
+            if unpushed == PUSH_BATCH:
+                git(repo, "push", "origin", "HEAD")
+                unpushed = 0
         created += need
         print(f"{day}: +{need} коммитов")
 
-    if created:
+    if unpushed:
         git(repo, "push", "origin", "HEAD")
+    if created:
         print(f"Готово: создано и отправлено {created} коммитов")
     else:
         print("Готово: новых коммитов не требуется")
