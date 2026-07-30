@@ -101,17 +101,17 @@ def existing_commits(repo: str) -> Counter[date]:
 def file_counts(repo: str, langs: list[str]) -> dict[str, int]:
     """Сколько файлов каждого языка уже накоплено в целевом репо."""
     return {
-        lang: len(list(Path(repo, LANGUAGES[lang][0]).glob("example_*")))
+        lang: len(list(Path(repo, LANGUAGES[lang][0]).glob(f"*.{LANGUAGES[lang][0]}")))
         for lang in langs
     }
 
 
-def make_commit(repo: str, lang: str, day: date, index: int, file_index: int) -> None:
+def make_commit(repo: str, lang: str, day: date, index: int) -> None:
     ext, comment, code = LANGUAGES[lang]
     # префикс выравнивается до 2 символов ("# " и "//"), чтобы файлы всех
     # языков были байт-в-байт одного размера
     body = f"{code}\n{comment:2} seed: {random.getrandbits(64):016x}\n"
-    filename = f"{ext}/example_{file_index:05d}.{ext}"
+    filename = f"{ext}/{day.isoformat()}_{index + 1}.{ext}"
     Path(repo, ext).mkdir(exist_ok=True)
     Path(repo, filename).write_text(body, encoding="utf-8", newline="\n")
     stamp = (datetime.combine(day, time(12, 0)) + timedelta(minutes=index)).isoformat()
@@ -169,7 +169,7 @@ def main() -> None:
             # наименее заполненный язык — чтобы веса языков оставались равными
             lang = min(langs, key=lambda l: (counts[l], random.random()))
             counts[lang] += 1
-            make_commit(repo, lang, day, existing[day] + i, counts[lang])
+            make_commit(repo, lang, day, existing[day] + i)
             unpushed += 1
             if unpushed == PUSH_BATCH:
                 git(repo, "push", "origin", "HEAD")
