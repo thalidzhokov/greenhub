@@ -168,28 +168,6 @@
 
     <div class="field">
       <span>Ачивки профиля</span>
-      <div class="checks column">
-        <label><input id="ach-quickdraw" type="checkbox"> Quickdraw — issue, закрытый за 5 минут</label>
-        <label><input id="ach-yolo" type="checkbox"> YOLO — мерж PR без ревью</label>
-      </div>
-      <div class="row">
-        <label class="inline"><input id="ach-shark" type="checkbox"> Pull Shark — смердженные PR, тир</label>
-        <select id="ach-shark-tier" disabled>
-          <option value="default">default — 2</option>
-          <option value="bronze">bronze — 16</option>
-          <option value="silver">silver — 128</option>
-          <option value="gold">gold — 1024</option>
-        </select>
-      </div>
-      <div class="row">
-        <label class="inline"><input id="ach-pair" type="checkbox"> Pair Extraordinaire — co-authored коммиты, тир</label>
-        <select id="ach-pair-tier" disabled>
-          <option value="default">default — 1</option>
-          <option value="bronze">bronze — 10</option>
-          <option value="silver">silver — 24</option>
-          <option value="gold">gold — 48</option>
-        </select>
-      </div>
       <details class="hint">
         <summary>Как начисляются ачивки?</summary>
         <p>
@@ -198,14 +176,104 @@
           Pull Shark считает смердженные PR, Pair Extraordinaire — co-authored коммиты в смердженных PR (прямые пуши в main не засчитываются).
         </p>
       </details>
+      <div class="checks column">
+        <label><input id="ach-quickdraw" type="checkbox"> Quickdraw</label>
+        <details class="hint">
+          <summary>Что делает Quickdraw?</summary>
+          <p>
+            Бейдж за issue или PR, закрытый в течение пяти минут после открытия.
+            Сервис открывает в репозитории issue и закрывает его через минуту.
+            Тиров нет, одного раза достаточно.
+          </p>
+        </details>
+        <label><input id="ach-yolo" type="checkbox"> YOLO</label>
+        <details class="hint">
+          <summary>Что делает YOLO?</summary>
+          <p>
+            Бейдж за PR, смердженный без ревью. Тиров нет, одного раза достаточно.
+            Если отмечены Pull Shark или Pair Extraordinaire, отдельный PR не создаётся —
+            YOLO выпадает на первом же их мерже.
+          </p>
+        </details>
+      </div>
+      <div class="row">
+        <label class="inline"><input id="ach-shark" type="checkbox"> Pull Shark, тир</label>
+        <select id="ach-shark-tier" disabled>
+          <option value="default">default — 2</option>
+          <option value="bronze">bronze — 16</option>
+          <option value="silver">silver — 128</option>
+          <option value="gold">gold — 1024</option>
+        </select>
+      </div>
+      <details class="hint">
+        <summary>Что делает Pull Shark?</summary>
+        <p>
+          Бейдж за смердженные PR: 2 — базовый, 16 — бронза (x2), 128 — серебро (x3), 1024 — золото (x4).
+          Сервис создаёт PR с пустым коммитом и сразу мержит, повторяя до выбранного тира.
+          Уже смердженные PR автора учитываются — прогон делает только недостающие, но не более 300 за раз;
+          остаток добирается повторным запуском.
+        </p>
+      </details>
+      <div class="row">
+        <label class="inline"><input id="ach-pair" type="checkbox"> Pair Extraordinaire, тир</label>
+        <select id="ach-pair-tier" disabled>
+          <option value="default">default — 1</option>
+          <option value="bronze">bronze — 10</option>
+          <option value="silver">silver — 24</option>
+          <option value="gold">gold — 48</option>
+        </select>
+      </div>
+      <details class="hint">
+        <summary>Что делает Pair Extraordinaire?</summary>
+        <p>
+          Бейдж за коммиты с соавтором в смердженных PR: 1 — базовый, 10 — бронза (x2), 24 — серебро (x3), 48 — золото (x4).
+          Сервис делает коммит с трейлером <code>Co-authored-by</code> (один соавтор на коммит), открывает PR и мержит.
+          Ачивку получают оба: и автор, и соавтор из трейлера — подтверждение от соавтора не требуется.
+        </p>
+      </details>
     </div>
 
     <div id="pair-options" class="hidden">
       <div class="field">
         <span>Соавторы — по одному на коммит</span>
+        <details class="hint">
+          <summary>В каком порядке берутся соавторы?</summary>
+          <p>
+            Первый co-authored коммит прогона - с {{ owner_coauthor }}.
+            Дальше знакомые из поля - по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
+            Повторы возможны, только когда выбраны одни сервисные аккаунты - со знаменитостями каждое имя используется не более одного раза.
+          </p>
+          <p>
+            Соавторство засчитывается только с аккаунтами пользователей: организации и боты GitHub не привязывает к трейлеру.
+            Перед прогоном каждый логин проверяется через API, неподходящие пропускаются с записью в лог.
+          </p>
+        </details>
         <div class="checks column">
-          <label><input type="checkbox" checked disabled> {{ owner_coauthor }} — первый коммит, один раз</label>
+          <label><input type="checkbox" checked disabled> {{ owner_coauthor }}</label>
+          <details class="hint">
+            <summary>Почему {{ owner_coauthor }}?</summary>
+            <p>
+              Автор greenhub. Первый co-authored коммит прогона уходит ему, ровно один за прогон —
+              коммиты создаются его кодом, так что это атрибуция инструмента, а не спам в чужой профиль;
+              репорт за одну такую запись не прилетит.
+              Если токен принадлежит самому {{ owner_coauthor }}, трейлер пропускается:
+              автор коммита не может быть своим соавтором.
+            </p>
+          </details>
           <input id="ach-friends" type="text" placeholder="логины знакомых через запятую" autocomplete="off" spellcheck="false">
+          <details class="hint">
+            <summary>Кого указывать?</summary>
+            <p>
+              Лучше всего — знакомых, которые сами хотят Pair Extraordinaire: ачивка начисляется
+              обоим, подтверждение не требуется, а взаимный прогон закроет тир и им.
+              Указывайте тех, кто в курсе: co-authored коммиты попадают в таймлайн и активность
+              профиля соавтора.
+            </p>
+            <p>
+              Незнакомцев вписывать не стоит — это записи в чужом профиле без спроса и повод для репорта.
+              Каждый логин из поля используется один раз, в порядке списка.
+            </p>
+          </details>
           <label><input id="ach-bots" type="checkbox" checked> сервисные аккаунты ({{ bot_coauthors | length }})</label>
           <details class="hint">
             <summary>Какие сервисные аккаунты?</summary>
@@ -225,19 +293,6 @@
             <p>{{ celeb_coauthors | join(", ") }}.</p>
           </details>
         </div>
-        <input id="ach-friends" type="text" placeholder="логины знакомых через запятую" autocomplete="off" spellcheck="false">
-        <details class="hint">
-          <summary>В каком порядке берутся соавторы?</summary>
-          <p>
-            Первый co-authored коммит прогона - с {{ owner_coauthor }}.
-            Дальше знакомые из поля - по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
-            Повторы возможны, только когда выбраны одни сервисные аккаунты - со знаменитостями каждое имя используется не более одного раза.
-          </p>
-          <p>
-            Соавторство засчитывается только с аккаунтами пользователей: организации и боты GitHub не привязывает к трейлеру.
-            Перед прогоном каждый логин проверяется через API, неподходящие пропускаются с записью в лог.
-          </p>
-        </details>
       </div>
     </div>
 
