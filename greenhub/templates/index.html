@@ -205,8 +205,25 @@
         <span>Соавторы — по одному на коммит</span>
         <div class="checks column">
           <label><input type="checkbox" checked disabled> {{ owner_coauthor }} — первый коммит, один раз</label>
-          <label><input id="ach-bots" type="checkbox" checked> сервисные аккаунты ({{ bots_count }})</label>
-          <label><input id="ach-celebs" type="checkbox"> знаменитости ({{ celebs_count }})</label>
+          <input id="ach-friends" type="text" placeholder="логины знакомых через запятую" autocomplete="off" spellcheck="false">
+          <label><input id="ach-bots" type="checkbox" checked> сервисные аккаунты ({{ bot_coauthors | length }})</label>
+          <details class="hint">
+            <summary>Какие сервисные аккаунты?</summary>
+            <p>
+              Аккаунты ботов и сервисов, оформленные на GitHub как обычные пользователи, — соавторство с ними засчитывается,
+              а лишние коммиты в чужом личном профиле никому не мешают:
+            </p>
+            <p>{{ bot_coauthors | join(", ") }}.</p>
+          </details>
+          <label><input id="ach-celebs" type="checkbox"> знаменитости ({{ celeb_coauthors | length }})</label>
+          <details class="hint">
+            <summary>Какие знаменитости?</summary>
+            <p>
+              Известные разработчики; каждому уходит не более одного соавторства за прогон — одна co-authored запись
+              теряется в их активности, но она попадёт в их профиль, поэтому группа выключена по умолчанию:
+            </p>
+            <p>{{ celeb_coauthors | join(", ") }}.</p>
+          </details>
         </div>
         <input id="ach-friends" type="text" placeholder="логины знакомых через запятую" autocomplete="off" spellcheck="false">
         <details class="hint">

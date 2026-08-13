@@ -240,8 +240,8 @@ def index():
         fonts=FONTS,
         default_font=DEFAULT_FONT,
         owner_coauthor=achievements.OWNER_COAUTHOR,
-        bots_count=len(achievements.BOT_COAUTHORS),
-        celebs_count=len(achievements.CELEB_COAUTHORS),
+        bot_coauthors=achievements.BOT_COAUTHORS,
+        celeb_coauthors=achievements.CELEB_COAUTHORS,
     )
 
 
