@@ -32,7 +32,7 @@ docker-compose up --build -d
 
 Нужен Personal Access Token (PAT):
 
-- **Fine-grained** (рекомендуется): github.com/settings/personal-access-tokens -> Generate new token; Repository access - Only select repositories; Permissions -> Contents: Read and write.
+- **Fine-grained** (рекомендуется): github.com/settings/personal-access-tokens -> Generate new token; Repository access - Only select repositories; Permissions -> Contents: Read and write, для ачивок дополнительно Issues и Pull requests: Read and write.
 - **Classic**: github.com/settings/tokens -> scope `repo` (даёт доступ ко всем репозиториям сразу).
 
 ## Как устроен таймлайн
@@ -67,12 +67,26 @@ docker-compose up --build -d
 
 > Важно! Чтобы коммиты попадали на таймлайн, email автора должен совпадать с email аккаунта GitHub, а репозиторий должен быть публичным или включён показ приватных контрибуций.
 
+## Ачивки
+
+Блок "Ачивки профиля" под вкладками добавляет в прогон пуша бейджи профиля GitHub:
+
+- **Quickdraw** - issue открывается и закрывается в течение пяти минут;
+- **YOLO** - мерж PR без ревью; выпадает само на первом мерже Pull Shark или Pair;
+- **Pull Shark** - серия пустых PR с мержем до выбранного тира (2/16/128/1024); текущее число смердженных PR читается через Search API, за прогон создаётся не более 300 - остаток добирается следующими запусками;
+- **Pair Extraordinaire** - коммиты с трейлером `Co-authored-by:` в смердженных PR до выбранного тира (1/10/24/48).
+
+Соавторы - по одному на коммит: первым идёт владелец сервиса (один раз), затем знакомые из поля, затем случайный выбор из сервисных аккаунтов и знаменитостей. Знаменитости - без повторов; сервисные аккаунты могут повторяться, если знаменитости не отмечены. Перед прогоном каждый логин проверяется через API: организации, [bot]-аккаунты и сам автор токена пропускаются - GitHub засчитывает соавторство только с пользователями.
+
+Ачивки начисляются GitHub с задержкой - бейджи появляются в профиле через несколько часов.
+
 ## Структура
 
 | Путь | Назначение |
 | --- | --- |
 | `greenhub/webapp.py` | UI и Flask-приложение `/api/preview`, `/api/push`, `/api/jobs/<id>` |
 | `greenhub/core.py` | планирование целей по дням, создание и пуш коммитов |
+| `greenhub/achievements.py` | ачивки профиля: Quickdraw, YOLO, Pull Shark, Pair Extraordinaire |
 | `greenhub/font.py` | пиксельные шрифты, парсинг файлов глифов, рендер текста |
 | `greenhub/snippets.py` | реестр языков и сниппетов |
 | `greenhub/templates/`, `greenhub/static/` | фронтенд |

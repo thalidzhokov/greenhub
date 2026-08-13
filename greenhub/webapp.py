@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, render_template, request
 
+import achievements
 import core
 from font import FONTS_DIR, available_fonts, load_font, render_text
 from snippets import LANGUAGES
@@ -160,6 +161,10 @@ def validate(
     if extra is None:
         return None, error
 
+    ach, error = achievements_params(payload)
+    if error:
+        return None, error
+
     params: dict[str, Any] = {
         "repo": repo,
         "token": token,
@@ -168,8 +173,41 @@ def validate(
         "high": limits[1],
         "start": start,
         "mode": payload.get("mode"),
+        "achievements": ach,
     }
     return params | extra, None
+
+
+def achievements_params(
+    payload: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Параметры блока ачивок: галочки, тиры и источники соавторов."""
+    quickdraw = bool(payload.get("ach_quickdraw"))
+    yolo = bool(payload.get("ach_yolo"))
+    shark_tier = payload.get("ach_shark_tier")
+    pair_tier = payload.get("ach_pair_tier")
+    if shark_tier and shark_tier not in achievements.PULL_SHARK_TIERS:
+        return None, f"Неизвестный тир Pull Shark: {shark_tier}"
+    if pair_tier and pair_tier not in achievements.PAIR_TIERS:
+        return None, f"Неизвестный тир Pair Extraordinaire: {pair_tier}"
+    raw_friends = str(payload.get("ach_friends", ""))
+    friends = [login.strip().lstrip("@") for login in raw_friends.split(",") if login.strip()]
+    use_bots = bool(payload.get("ach_bots"))
+    use_celebs = bool(payload.get("ach_celebs"))
+    if pair_tier and not (friends or use_bots or use_celebs):
+        return None, "Для Pair Extraordinaire выберите источник соавторов: знакомые, сервисные аккаунты или знаменитости"
+    if not (quickdraw or yolo or shark_tier or pair_tier):
+        return None, None
+    params: dict[str, Any] = {
+        "quickdraw": quickdraw,
+        "yolo": yolo,
+        "shark_tier": shark_tier or None,
+        "pair_tier": pair_tier or None,
+        "friends": friends,
+        "use_bots": use_bots,
+        "use_celebs": use_celebs,
+    }
+    return params, None
 
 
 def make_targets(params: dict[str, Any], rnd: random.Random) -> dict[date, int]:
@@ -201,6 +239,9 @@ def index():
         languages=sorted(LANGUAGES),
         fonts=FONTS,
         default_font=DEFAULT_FONT,
+        owner_coauthor=achievements.OWNER_COAUTHOR,
+        bots_count=len(achievements.BOT_COAUTHORS),
+        celebs_count=len(achievements.CELEB_COAUTHORS),
     )
 
 
@@ -277,12 +318,29 @@ def push():
         targets = make_targets(params, random.Random())
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    job_id = start_job(
-        lambda log: core.run_push(
-            params["repo"], params["token"], params["langs"], targets, log
-        ),
-        params["token"],
-    )
+    def job(log: core.Log) -> int:
+        def push_timeline() -> int:
+            return core.run_push(
+                params["repo"], params["token"], params["langs"], targets, log
+            )
+
+        ach = params["achievements"]
+        if not ach:
+            return push_timeline()
+        # ачивки первыми: их PR-мерджи попадают в main до того, как пуш
+        # таймлайна досчитает остаток по датам; но в пустом репозитории
+        # у PR нет базовой ветки — тогда сначала пушим таймлайн
+        _, heads = core.ls_remote(params["repo"], params["token"])
+        if heads == 0:
+            created = push_timeline()
+            achievements.run_achievements(
+                params["repo"], params["token"], ach, log
+            )
+            return created
+        achievements.run_achievements(params["repo"], params["token"], ach, log)
+        return push_timeline()
+
+    job_id = start_job(job, params["token"])
     return jsonify({"job": job_id})
 
 

@@ -161,11 +161,19 @@ def file_counts(repo: str, langs: list[str]) -> dict[str, int]:
     }
 
 
+# ширина seed-строки задана самым длинным вариантом: "<!-- seed: <16 hex> -->"
+SEED_LINE_WIDTH = 31
+
+
 def make_commit(repo: str, lang: str, day: date, index: int) -> None:
-    ext, comment, code = LANGUAGES[lang]
-    # префикс выравнивается до 2 символов ("# " и "//"), чтобы файлы всех
+    ext, opener, closer, code = LANGUAGES[lang]
+    # строка добивается знаками "=" до общей ширины, чтобы файлы всех
     # языков были байт-в-байт одного размера
-    body = f"{code}\n{comment:2} seed: {random.getrandbits(64):016x}\n"
+    line = f"{opener} seed: {random.getrandbits(64):016x}"
+    pad = SEED_LINE_WIDTH - len(line) - len(closer)
+    if pad > 0:
+        line += " " + "=" * (pad - 1)
+    body = f"{code}\n{line}{closer}\n"
     filename = f"{ext}/{day.isoformat()}_{index + 1}.{ext}"
     Path(repo, ext).mkdir(exist_ok=True)
     Path(repo, filename).write_text(body, encoding="utf-8", newline="\n")

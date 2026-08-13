@@ -41,6 +41,15 @@ $("random").addEventListener("change", () => {
   $("fixed-count").classList.toggle("hidden", $("random").checked);
 });
 
+function syncAchievements() {
+  $("ach-shark-tier").disabled = !$("ach-shark").checked;
+  $("ach-pair-tier").disabled = !$("ach-pair").checked;
+  $("pair-options").classList.toggle("hidden", !$("ach-pair").checked);
+}
+
+$("ach-shark").addEventListener("change", syncAchievements);
+$("ach-pair").addEventListener("change", syncAchievements);
+
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
@@ -140,6 +149,13 @@ function collectParams() {
     params.text = $("text").value;
     params.font = $("font").value;
   }
+  params.ach_quickdraw = $("ach-quickdraw").checked;
+  params.ach_yolo = $("ach-yolo").checked;
+  params.ach_shark_tier = $("ach-shark").checked ? $("ach-shark-tier").value : null;
+  params.ach_pair_tier = $("ach-pair").checked ? $("ach-pair-tier").value : null;
+  params.ach_friends = $("ach-friends").value;
+  params.ach_bots = $("ach-bots").checked;
+  params.ach_celebs = $("ach-celebs").checked;
   return params;
 }
 
@@ -399,7 +415,8 @@ $("clear-btn").addEventListener("click", async () => {
 // --- сохранение формы между перезагрузками страницы ---
 
 const STORAGE_KEY = "greenhub-form";
-const TEXT_FIELDS = ["repo", "token", "min-commits", "max-commits", "commits", "start-date", "end-date", "text"];
+const TEXT_FIELDS = ["repo", "token", "min-commits", "max-commits", "commits", "start-date", "end-date", "text", "ach-friends"];
+const ACH_FIELDS = ["ach-quickdraw", "ach-yolo", "ach-shark", "ach-pair", "ach-bots", "ach-celebs"];
 
 const checkStates = (containerId) =>
   Object.fromEntries(
@@ -413,6 +430,9 @@ function saveForm() {
     font: $("font").value,
     languages: checkStates("languages"),
     weekdays: checkStates("weekdays"),
+    ach: Object.fromEntries(ACH_FIELDS.map((id) => [id, $(id).checked])),
+    ach_shark_tier: $("ach-shark-tier").value,
+    ach_pair_tier: $("ach-pair-tier").value,
     tab: currentTab,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -438,6 +458,12 @@ function restoreForm() {
       if (saved && input.value in saved) input.checked = saved[input.value];
     }
   }
+  for (const id of ACH_FIELDS) {
+    if (state.ach && id in state.ach) $(id).checked = state.ach[id];
+  }
+  if (state.ach_shark_tier) $("ach-shark-tier").value = state.ach_shark_tier;
+  if (state.ach_pair_tier) $("ach-pair-tier").value = state.ach_pair_tier;
+  syncAchievements();
   if (state.tab === "text") document.querySelector('.tab[data-tab="text"]').click();
 }
 

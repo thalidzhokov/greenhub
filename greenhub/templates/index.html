@@ -47,8 +47,14 @@
             <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → Generate new token.
             Настройки:
             <ul>
-              <li>Repository access — Only select repositories, выбрать репозиторий для коммитов (напр., greenhub-repo);</li>
-              <li>Permissions → Repository permissions → Contents: Read and write — это единственное нужное разрешение.</li>
+              <li>Repository access -> Only select repositories -> выбрать репозиторий для коммитов (напр., greenhub-repo);</li>
+              <li>Permissions -> Repository permissions -> Contents -> Access: Read and write 
+                <p>Дополнительно для ачивок: </p>
+                <ul>
+                  <li>Issues -> Access: Read and write</li>
+                  <li>Pull requests -> Access: Read and write</li>
+                </ul>
+              </li>
             </ul>
           </li>
           <li>
@@ -156,6 +162,64 @@
       <div class="field">
         <span>Превью шрифта</span>
         <div id="font-preview" class="font-preview"></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <span>Ачивки профиля</span>
+      <div class="checks">
+        <label><input id="ach-quickdraw" type="checkbox"> Quickdraw — issue, закрытый за 5 минут</label>
+        <label><input id="ach-yolo" type="checkbox"> YOLO — мерж PR без ревью</label>
+      </div>
+      <div class="row">
+        <label class="inline"><input id="ach-shark" type="checkbox"> Pull Shark — смердженные PR, тир</label>
+        <select id="ach-shark-tier" disabled>
+          <option value="default">default — 2</option>
+          <option value="bronze">bronze — 16</option>
+          <option value="silver">silver — 128</option>
+          <option value="gold">gold — 1024</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="inline"><input id="ach-pair" type="checkbox"> Pair Extraordinaire — co-authored коммиты, тир</label>
+        <select id="ach-pair-tier" disabled>
+          <option value="default">default — 1</option>
+          <option value="bronze">bronze — 10</option>
+          <option value="silver">silver — 24</option>
+          <option value="gold">gold — 48</option>
+        </select>
+      </div>
+      <details class="hint">
+        <summary>Как начисляются ачивки?</summary>
+        <p>
+          GitHub пересчитывает ачивки с задержкой — бейджи появляются в профиле через несколько часов после прогона.
+          YOLO выпадает само на первом мерже Pull Shark или Pair, отдельный прогон нужен, только если они не отмечены.
+          Pull Shark считает смердженные PR, Pair Extraordinaire — co-authored коммиты в смердженных PR (прямые пуши в main не засчитываются).
+        </p>
+      </details>
+    </div>
+
+    <div id="pair-options" class="hidden">
+      <div class="field">
+        <span>Соавторы — по одному на коммит</span>
+        <div class="checks">
+          <label><input type="checkbox" checked disabled> {{ owner_coauthor }} — первый коммит, один раз</label>
+          <label><input id="ach-bots" type="checkbox" checked> сервисные аккаунты ({{ bots_count }})</label>
+          <label><input id="ach-celebs" type="checkbox"> знаменитости ({{ celebs_count }})</label>
+        </div>
+        <input id="ach-friends" type="text" placeholder="логины знакомых через запятую" autocomplete="off" spellcheck="false">
+        <details class="hint">
+          <summary>В каком порядке берутся соавторы?</summary>
+          <p>
+            Первый co-authored коммит прогона — с {{ owner_coauthor }} (если пушит он сам, GitHub сольёт трейлер в обычный коммит, поэтому он пропускается).
+            Дальше знакомые из поля — по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
+            Повторы возможны, только когда выбраны одни сервисные аккаунты — со знаменитостями каждое имя используется не более одного раза.
+          </p>
+          <p>
+            Соавторство засчитывается только с аккаунтами пользователей: организации и [bot]-аккаунты GitHub не привязывает к трейлеру.
+            Перед прогоном каждый логин проверяется через API, неподходящие пропускаются с записью в лог.
+          </p>
+        </details>
       </div>
     </div>
 
