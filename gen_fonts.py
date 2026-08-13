@@ -1,3 +1,4 @@
+# pyright: basic
 """Одноразовый генератор: OTF (FontStruct) -> файлы глифов в формате glyphs.
 
 Для каждого символа A-Z a-z 0-9 сэмплирует центры клеток пиксельной сетки
@@ -55,15 +56,15 @@ class PolyPen(BasePen):
         self.contours[-1].append(pt)
         self.anchors.append(pt)
 
-    def _curveToOne(self, p1, p2, p3):
+    def _curveToOne(self, pt1, pt2, pt3):
         p0 = self.contours[-1][-1]
         for i in range(1, 17):
             t = i / 16
             u = 1 - t
-            x = u**3 * p0[0] + 3 * u**2 * t * p1[0] + 3 * u * t**2 * p2[0] + t**3 * p3[0]
-            y = u**3 * p0[1] + 3 * u**2 * t * p1[1] + 3 * u * t**2 * p2[1] + t**3 * p3[1]
+            x = u**3 * p0[0] + 3 * u**2 * t * pt1[0] + 3 * u * t**2 * pt2[0] + t**3 * pt3[0]
+            y = u**3 * p0[1] + 3 * u**2 * t * pt1[1] + 3 * u * t**2 * pt2[1] + t**3 * pt3[1]
             self.contours[-1].append((x, y))
-        self.anchors.append(p3)
+        self.anchors.append(pt3)
 
     def _closePath(self):
         pass
@@ -131,7 +132,7 @@ def build_from_dots(outlines: dict[str, list]) -> tuple[dict[str, list[str]], in
 
 def build_font(otf_path: Path) -> tuple[dict[str, list[str]], int] | None:
     font = TTFont(otf_path)
-    cmap = font.getBestCmap()
+    cmap = font.getBestCmap() or {}
     glyph_set = font.getGlyphSet()
 
     outlines: dict[str, list] = {}
@@ -208,7 +209,7 @@ def main() -> None:
         if result is None:
             print("  ИСКЛЮЧЁН")
             continue
-        glyphs, rows = result
+        glyphs, _ = result
         if font_id in UNSLANT:
             glyphs = {ch: unslant(matrix) for ch, matrix in glyphs.items()}
         write_font(dest / f"{font_id}.txt", name, glyphs)

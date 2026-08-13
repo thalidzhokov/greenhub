@@ -4,7 +4,9 @@ import os
 import random
 import threading
 import uuid
+from collections.abc import Callable
 from datetime import date
+from typing import Any, cast
 
 from flask import Flask, jsonify, render_template, request
 
@@ -19,7 +21,7 @@ MAX_TEXT_LEN = 1000
 FONTS = available_fonts()
 DEFAULT_FONT = "5x7-pixel-slanted"
 
-JOBS: dict[str, dict] = {}
+JOBS: dict[str, dict[str, Any]] = {}
 
 
 def to_int(value: object) -> int | None:
@@ -36,7 +38,7 @@ def parse_iso(value: object) -> date | None:
         return None
 
 
-def repo_params(payload: dict) -> tuple[str, str, str | None]:
+def repo_params(payload: dict[str, Any]) -> tuple[str, str, str | None]:
     """Достаёт и проверяет URL репозитория и токен: (repo, token, ошибка)."""
     repo = str(payload.get("repo", "")).strip()
     token = str(payload.get("token", "")).strip()
@@ -52,10 +54,10 @@ def scrub(message: str, token: str) -> str:
     return message.replace(token, "***") if token else message
 
 
-def validate(payload: dict, need_repo: bool) -> tuple[dict | None, str | None]:
+def validate(payload: dict[str, Any], need_repo: bool) -> tuple[dict[str, Any] | None, str | None]:
     """Проверяет параметры формы. Возвращает (параметры, None) или (None, ошибка)."""
     repo, token, repo_error = repo_params(payload)
-    params: dict = {"repo": repo, "token": token}
+    params: dict[str, Any] = {"repo": repo, "token": token}
     if need_repo and repo_error:
         return None, repo_error
 
@@ -97,7 +99,8 @@ def validate(payload: dict, need_repo: bool) -> tuple[dict | None, str | None]:
         raw_weekdays = payload.get("weekdays", [])
         if not isinstance(raw_weekdays, list) or not raw_weekdays:
             return None, "Выберите хотя бы один день недели"
-        weekdays = {(to_int(d) + 6) % 7 for d in raw_weekdays if to_int(d) is not None}
+        raws = cast(list[object], raw_weekdays)
+        weekdays = {(d + 6) % 7 for raw in raws if (d := to_int(raw)) is not None}
         if not weekdays:
             return None, "Выберите хотя бы один день недели"
         params["end"], params["weekdays"] = end, weekdays
@@ -115,7 +118,7 @@ def validate(payload: dict, need_repo: bool) -> tuple[dict | None, str | None]:
     return params, None
 
 
-def make_targets(params: dict, rnd: random.Random) -> dict[date, int]:
+def make_targets(params: dict[str, Any], rnd: random.Random) -> dict[date, int]:
     # в режиме текста даты могут уходить в будущее: эти клетки
     # закрасятся на таймлайне, когда наступят соответствующие дни
     if params["mode"] == "text":
@@ -149,7 +152,7 @@ def index():
 
 @app.post("/api/font-preview")
 def font_preview():
-    payload = request.get_json(silent=True) or {}
+    payload: dict[str, Any] = request.get_json(silent=True) or {}
     font = str(payload.get("font", DEFAULT_FONT))
     if font not in FONTS:
         return jsonify({"error": f"Неизвестный шрифт: {font}"}), 400
@@ -166,7 +169,7 @@ def font_preview():
 @app.post("/api/preview")
 def preview():
     params, error = validate(request.get_json(silent=True) or {}, need_repo=False)
-    if error:
+    if params is None:
         return jsonify({"error": error}), 400
     try:
         targets = make_targets(params, random.Random())
@@ -194,7 +197,7 @@ def check():
     return jsonify({"message": f"Репозиторий доступен, ветка по умолчанию: {branch}"})
 
 
-def start_job(fn, token: str) -> str:
+def start_job(fn: Callable[[core.Log], int | None], token: str) -> str:
     """Запускает fn(log) в фоне, возвращает id задачи."""
     job_id = uuid.uuid4().hex[:8]
     job = JOBS[job_id] = {"status": "running", "log": [], "created": 0}
@@ -214,7 +217,7 @@ def start_job(fn, token: str) -> str:
 @app.post("/api/push")
 def push():
     params, error = validate(request.get_json(silent=True) or {}, need_repo=True)
-    if error:
+    if params is None:
         return jsonify({"error": error}), 400
     try:
         targets = make_targets(params, random.Random())

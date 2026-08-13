@@ -14,7 +14,7 @@ Column = list[bool]  # 7 клеток одной недели, вс-сб
 
 def available_fonts() -> dict[str, str]:
     """Шрифты из fonts/: id (имя файла без .txt) -> отображаемое имя."""
-    fonts = {}
+    fonts: dict[str, str] = {}
     for path in sorted(FONTS_DIR.glob("*.txt")):
         first_line = path.read_text(encoding="utf-8").splitlines()[0]
         name = first_line.removeprefix("name:").strip()

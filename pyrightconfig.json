@@ -1,4 +1,5 @@
 {
+    "reportMissingTypeStubs": false,
     "executionEnvironments": [
         {
             "root": "greenhub"
