@@ -4,8 +4,8 @@
 greenhub пушит коммиты: issue с быстрым закрытием, PR с мержом без ревью,
 серия мерджей и co-authored коммиты в смердженных PR. Каждый PR несёт один
 обычный сниппет-коммит с датой из свободного дня плана таймлайна и мержится
-rebase'ом — так клетки ложатся на запланированные даты, а не в день прогона.
-GitHub начисляет ачивки с задержкой — результат виден в профиле не сразу.
+rebase-ом, так клетки ложатся на запланированные даты, а не в день прогона.
+GitHub начисляет ачивки с задержкой и результат виден в профиле не сразу.
 """
 
 import json
@@ -98,8 +98,13 @@ OWNER_COAUTHOR = "thalidzhokov"
 PULL_SHARK_TIERS = {"default": 2, "bronze": 16, "silver": 128, "gold": 1024}
 PAIR_TIERS = {"default": 1, "bronze": 10, "silver": 24, "gold": 48}
 
-# за один прогон не делаем больше — остаток добирается следующими запусками
-MAX_PRS_PER_RUN = 300
+# за один прогон не делаем больше — остаток добирается следующими запусками;
+# массовое создание PR упирается в secondary rate limits и правила GitHub
+# об automated bulk activity, поэтому лимит консервативный
+MAX_PRS_PER_RUN = 128
+
+# пауза между PR: снижает шанс словить secondary rate limit
+PR_PAUSE_SECONDS = 2
 
 Log = core.Log
 
@@ -122,27 +127,39 @@ def api(
     payload: dict[str, object] | None = None,
     ignore_errors: bool = False,
 ) -> tuple[int, object]:
-    request = urllib.request.Request(
-        f"https://api.github.com{path}",
-        method=method,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "application/json",
-        },
-        data=json.dumps(payload).encode() if payload is not None else None,
-    )
-    try:
-        with urllib.request.urlopen(request) as response:
-            raw = response.read().decode()
-            return response.status, json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        if ignore_errors:
-            return exc.code, {}
-        raise ApiError(f"GitHub API {method} {path}: {exc.code} {body[:300]}") from None
-    except urllib.error.URLError as exc:
-        raise ApiError(f"GitHub API {method} {path}: {exc.reason}") from None
+    for attempt in range(3):
+        request = urllib.request.Request(
+            f"https://api.github.com{path}",
+            method=method,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload).encode() if payload is not None else None,
+        )
+        try:
+            with urllib.request.urlopen(request) as response:
+                raw = response.read().decode()
+                return response.status, json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            # secondary rate limit: ждём, сколько велено, и повторяем;
+            # обычный 403 без Retry-After (нет прав) сюда не попадает
+            retry_after = exc.headers.get("Retry-After", "")
+            if exc.code in (403, 429) and attempt < 2:
+                if retry_after or "secondary rate limit" in body:
+                    delay = int(retry_after) if retry_after.isdigit() else 60
+                    time.sleep(min(delay, 120))
+                    continue
+            if ignore_errors:
+                return exc.code, {}
+            raise ApiError(
+                f"GitHub API {method} {path}: {exc.code} {body[:300]}"
+            ) from None
+        except urllib.error.URLError as exc:
+            raise ApiError(f"GitHub API {method} {path}: {exc.reason}") from None
+    raise ApiError(f"GitHub API {method} {path}: превышен лимит повторов")
 
 
 def api_json(
@@ -390,7 +407,7 @@ def run_prs(
 
     Каждый PR несёт один сниппет-коммит с датой из свободного дня плана:
     дни раздаются от свежих (не позже сегодня) к прошлым, Pair первым,
-    Pull Shark дальше в прошлое. Кончились дни — остаток тира добирается
+    Pull Shark дальше в прошлое. Кончились дни - остаток тира добирается
     следующими прогонами.
     """
     owner, name = owner_repo(repo_url)
@@ -478,6 +495,8 @@ def run_prs(
         jobs += [(day, "YOLO", None) for day in yolo_days]
 
         for done, (day, title, coauthor) in enumerate(jobs, 1):
+            if done > 1:
+                time.sleep(PR_PAUSE_SECONDS)
             # наименее заполненный язык — чтобы веса языков оставались равными
             lang = min(langs, key=lambda l: (counts[l], random.random()))
             counts[lang] += 1
@@ -487,8 +506,7 @@ def run_prs(
             branch = f"greenhub-{today.isoformat()}-{random.getrandbits(32):08x}"
             core.git(repo, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
             open_and_merge(owner, name, branch, token, title, base, log)
-            if done % 10 == 0:
-                log(f"PR-мерджи: {done}/{len(jobs)}")
+            log(f"PR-мердж: {done}/{len(jobs)}")
 
     if pair_logins:
         log(f"Pair: {len(pair_logins)} co-authored коммитов в смердженных PR")
