@@ -1,4 +1,4 @@
-"""Веб-интерфейс greenhub: форма параметров, превью таймлайна и запуск пуша."""
+"""Веб-интерфейс greenhub отвечает за форму параметров, превью таймлайна и запуск пуша."""
 
 import os
 import random
@@ -191,9 +191,7 @@ def check():
         return jsonify({"error": scrub(str(exc), token)}), 400
     if heads == 0:
         return jsonify({"message": "Репозиторий доступен, он пуст"})
-    return jsonify(
-        {"message": f"Репозиторий доступен, ветка по умолчанию: {branch}"}
-    )
+    return jsonify({"message": f"Репозиторий доступен, ветка по умолчанию: {branch}"})
 
 
 def start_job(fn, token: str) -> str:
