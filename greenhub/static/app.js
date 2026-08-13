@@ -355,7 +355,7 @@ $("push-btn").addEventListener("click", async () => {
   if (!confirm(`${estimate}.\nПушим в ${params.repo || "репозиторий"}?`)) return;
   try {
     const { job } = await postJSON("/api/push", params);
-    startJobUI("push-job", job, "Пушим коммиты…");
+    startJobUI("push-job", job, "Пушим коммиты...");
   } catch (exc) {
     showError(exc.message);
   }
@@ -390,7 +390,7 @@ $("clear-btn").addEventListener("click", async () => {
       repo,
       token: $("token").value.trim(),
     });
-    startJobUI("repo-job", job, "Очищаем репозиторий…");
+    startJobUI("repo-job", job, "Очищаем репозиторий...");
   } catch (exc) {
     showError(exc.message);
   }
