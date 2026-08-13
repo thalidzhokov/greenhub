@@ -47,6 +47,7 @@ select {
 input[type="text"], input[type="password"] { width: 100%; max-width: 480px; }
 input[type="number"] { width: 70px; }
 input:focus { outline: 2px solid #1f883d33; border-color: #1f883d; }
+#text:invalid { border-color: #d1242f; outline-color: #d1242f33; }
 
 .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
 .checks label { white-space: nowrap; cursor: pointer; }
@@ -60,14 +61,16 @@ input:focus { outline: 2px solid #1f883d33; border-color: #1f883d; }
 .tab {
   background: none;
   border: none;
+  border-radius: 0;
   padding: 8px 14px;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   color: #656d76;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
-.tab.active { color: #1f2328; font-weight: 600; border-bottom-color: #1f883d; }
+.tab.active { color: #1f2328; border-bottom-color: #1f883d; }
 
 .actions { display: flex; gap: 10px; margin-top: 8px; }
 
@@ -88,7 +91,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .error { color: #d1242f; font-size: 14px; margin: 10px 0 0; }
 
-.hint { margin-top: 8px; font-size: 12.5px; color: #656d76; max-width: 640px; }
+.hint { margin-top: 8px; font-size: 14px; color: #656d76; max-width: 640px; }
 .hint summary { cursor: pointer; user-select: none; }
 .hint summary:hover { color: #1f2328; }
 .hint p { margin: 8px 0 4px; }
@@ -179,7 +182,7 @@ section { margin-top: 24px; }
   border-radius: 8px;
   padding: 14px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.5;
   max-height: 320px;
   overflow: auto;

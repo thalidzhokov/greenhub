@@ -129,10 +129,17 @@
     </div>
 
     <div id="tab-text" class="hidden">
-      <label class="field">
-        <span>Текст (английские буквы и цифры, до 1000 символов)</span>
-        <input id="text" type="text" maxlength="1000" value="Welcome" spellcheck="false">
-      </label>
+      <div class="field">
+        <span>Текст</span>
+        <input id="text" type="text" maxlength="1000" pattern="[A-Za-z0-9 ]*" value="Welcome" spellcheck="false">
+        <details class="hint">
+          <summary>Какой текст можно ввести?</summary>
+          <p>
+            Английские буквы и цифры, пробел разделяет слова, можно ввести до 1000 символов.
+            Паттерн <code>[A-Za-z0-9 ]*</code>. Другие символы отрисовать нельзя - для них нет глифов в пиксельных шрифтах.
+          </p>
+        </details>
+      </div>
       <label class="field">
         <span>Шрифт</span>
         <select id="font">
