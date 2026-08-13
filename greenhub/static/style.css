@@ -19,7 +19,8 @@ main { max-width: 960px; margin: 24px auto 48px; padding: 0 16px; }
 h1 { font-size: 24px; margin: 0 0 4px; }
 h2 { font-size: 17px; }
 
-.muted { color: #656d76; margin-top: 0; }
+.muted { color: #656d76; margin-top: 0; max-width: 720px; }
+.muted a { color: #0969da; }
 
 .card {
   background: #fff;
