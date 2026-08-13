@@ -28,7 +28,7 @@ ALLOWED_HOSTS = {
     # "gitee.com",
 }
 FONTS = available_fonts()
-DEFAULT_FONT = "5x7-pixel-slanted"
+DEFAULT_FONT = "5x7-dotmatrix"
 
 JOBS: dict[str, dict[str, Any]] = {}
 
