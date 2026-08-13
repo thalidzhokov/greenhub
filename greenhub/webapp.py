@@ -340,24 +340,20 @@ def push():
         return jsonify({"error": str(exc)}), 400
 
     def job(log: core.Log) -> int:
-        def push_timeline() -> int:
-            return core.run_push(
-                params["repo"], params["token"], params["langs"], targets, log
+        # ачивки первыми: их PR-коммиты занимают свободные дни плана и после
+        # rebase-мержа уже лежат в main — пуш таймлайна досчитает остаток
+        if params["achievements"]:
+            achievements.run_achievements(
+                params["repo"],
+                params["token"],
+                params["achievements"],
+                targets,
+                params["langs"],
+                log,
             )
-
-        ach = params["achievements"]
-        if not ach:
-            return push_timeline()
-        # ачивки первыми: их PR-мерджи попадают в main до того, как пуш
-        # таймлайна досчитает остаток по датам; но в пустом репозитории
-        # у PR нет базовой ветки — тогда сначала пушим таймлайн
-        _, heads = core.ls_remote(params["repo"], params["token"])
-        if heads == 0:
-            created = push_timeline()
-            achievements.run_achievements(params["repo"], params["token"], ach, log)
-            return created
-        achievements.run_achievements(params["repo"], params["token"], ach, log)
-        return push_timeline()
+        return core.run_push(
+            params["repo"], params["token"], params["langs"], targets, log
+        )
 
     job_id = start_job(job, params["token"])
     return jsonify({"job": job_id})

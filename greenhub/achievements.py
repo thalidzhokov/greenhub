@@ -2,11 +2,12 @@
 
 Все четыре работают через штатный API поверх того же репозитория, куда
 greenhub пушит коммиты: issue с быстрым закрытием, PR с мержом без ревью,
-серия мерджей и co-authored коммиты в смердженных PR. GitHub начисляет
-ачивки с задержкой — результат виден в профиле не сразу.
+серия мерджей и co-authored коммиты в смердженных PR. Каждый PR несёт один
+обычный сниппет-коммит с датой из свободного дня плана таймлайна и мержится
+rebase'ом — так клетки ложатся на запланированные даты, а не в день прогона.
+GitHub начисляет ачивки с задержкой — результат виден в профиле не сразу.
 """
 
-import base64
 import json
 import random
 import re
@@ -263,18 +264,26 @@ def wait_mergeable(owner: str, name: str, number: int, token: str) -> None:
         time.sleep(1)
 
 
-def merge_pr(owner: str, name: str, number: int, token: str) -> None:
-    for attempt in range(2):
+def merge_pr(owner: str, name: str, number: int, token: str, log: Log) -> None:
+    # rebase сохраняет авторские даты коммитов и не создаёт merge-коммит,
+    # так что клетки таймлайна остаются на запланированных днях; merge —
+    # запасной путь на случай, когда rebase запрещён настройками репозитория
+    methods = ("rebase", "rebase", "merge")
+    for attempt, method in enumerate(methods):
         try:
             api_json(
                 "PUT",
                 f"/repos/{owner}/{name}/pulls/{number}/merge",
                 token,
-                {"merge_method": "merge"},
+                {"merge_method": method},
             )
+            if method == "merge":
+                log(
+                    f"PR #{number}: rebase не прошёл, merge-коммит лёг сегодняшним числом"
+                )
             return
         except ApiError:
-            if attempt == 1:
+            if attempt == len(methods) - 1:
                 raise
             wait_mergeable(owner, name, number, token)
 
@@ -292,57 +301,8 @@ def default_branch(owner: str, name: str, token: str) -> str:
     return str(api_json("GET", f"/repos/{owner}/{name}", token)["default_branch"])
 
 
-def head_sha(owner: str, name: str, branch: str, token: str) -> str:
-    ref = api_json("GET", f"/repos/{owner}/{name}/git/ref/heads/{branch}", token)
-    return str(ref["object"]["sha"])
-
-
-def make_branch(owner: str, name: str, token: str, prefix: str, sha: str) -> str:
-    """Создаёт ветку от указанного коммита через REST, подбирая свободное имя."""
-    for _ in range(100):
-        branch = f"{prefix}-{date.today().isoformat()}-{random.getrandbits(32):08x}"
-        status, _ = api(
-            "POST",
-            f"/repos/{owner}/{name}/git/refs",
-            token,
-            {"ref": f"refs/heads/{branch}", "sha": sha},
-            ignore_errors=True,
-        )
-        if status == 201:
-            return branch
-    raise RuntimeError(f"Не удалось подобрать свободное имя ветки {prefix}-*")
-
-
-def readme_commit(owner: str, name: str, branch: str, token: str, message: str) -> None:
-    """Коммит в ветку через Contents API: дописывает строку-маркер в README.
-
-    Не конфликтует с коммитами таймлайна, т.к. те добавляют файлы вида
-    ext/дата_N.ext и не трогают README.
-    """
-    status, info = api(
-        "GET",
-        f"/repos/{owner}/{name}/contents/README.md?ref={branch}",
-        token,
-        ignore_errors=True,
-    )
-    content, sha = "", None
-    if status == 200 and isinstance(info, dict) and "sha" in info:
-        readme = cast(dict[str, Any], info)
-        content = base64.b64decode(readme["content"]).decode()
-        sha = readme["sha"]
-    marker = f"{date.today().isoformat()} {random.getrandbits(64):016x}"
-    payload: dict[str, object] = {
-        "message": message,
-        "content": base64.b64encode(f"{content}\n- {marker}\n".encode()).decode(),
-        "branch": branch,
-    }
-    if sha:
-        payload["sha"] = sha
-    api_json("PUT", f"/repos/{owner}/{name}/contents/README.md", token, payload)
-
-
 def open_and_merge(
-    owner: str, name: str, branch: str, token: str, title: str, base: str
+    owner: str, name: str, branch: str, token: str, title: str, base: str, log: Log
 ) -> None:
     pr = api_json(
         "POST",
@@ -351,7 +311,7 @@ def open_and_merge(
         {"title": title, "head": branch, "base": base},
     )
     wait_mergeable(owner, name, pr["number"], token)
-    merge_pr(owner, name, pr["number"], token)
+    merge_pr(owner, name, pr["number"], token, log)
     delete_ref(owner, name, branch, token)
 
 
@@ -373,29 +333,6 @@ def run_quickdraw(owner: str, name: str, token: str, log: Log) -> None:
     log(f"Quickdraw: issue #{issue['number']} закрыт за ~1 минуту")
 
 
-def run_pull_shark(repo_url: str, token: str, need: int, log: Log) -> int:
-    """Пустые PR по одному на мерж. need — сколько мерджей не хватает до тира."""
-    owner, name = owner_repo(repo_url)
-    base = default_branch(owner, name, token)
-    with tempfile.TemporaryDirectory(prefix="greenhub-shark-") as work:
-        repo = str(Path(work) / "repo")
-        core.clone_repo(repo_url, token, repo, log)
-        core.configure_git_user(repo, token, log)
-        for done in range(1, need + 1):
-            branch = make_branch(
-                owner, name, token, "greenhub-shark", head_sha(owner, name, base, token)
-            )
-            core.git(repo, "fetch", "-q", "origin", branch)
-            core.git(repo, "checkout", "-q", f"origin/{branch}")
-            core.git(repo, "commit", "-q", "--allow-empty", "-m", f"Pull Shark {done}")
-            core.git(repo, "push", "-q", "origin", f"HEAD:{branch}")
-            open_and_merge(owner, name, branch, token, f"Pull Shark {done}", base)
-            if done % 10 == 0:
-                log(f"Pull Shark: смерджено {done}/{need}")
-    log(f"Pull Shark: смерджено {need} PR")
-    return need
-
-
 def has_open_pair_pr(owner: str, name: str, token: str) -> bool:
     _, data = api("GET", f"/repos/{owner}/{name}/pulls?state=open&per_page=100", token)
     if not isinstance(data, list):
@@ -404,75 +341,161 @@ def has_open_pair_pr(owner: str, name: str, token: str) -> bool:
     return any(str(pr.get("title", "")).startswith("Pair ") for pr in prs)
 
 
-def run_pair(
-    repo_url: str,
-    token: str,
-    commits: int,
+def coauthor_queue(
     friends: list[str],
     use_bots: bool,
     use_celebs: bool,
+    author_login: str,
+    count: int,
+    token: str,
     log: Log,
-) -> int:
-    """Co-authored коммиты в смердженных PR: каждый коммит — один трейлер.
-
-    Коммиты идут через Contents API, локальный клон не нужен: фаза не
-    зависит от состояния репозитория и не мешает пушу таймлайна.
-    """
-    owner, name = owner_repo(repo_url)
-    author = current_user(token)
+) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    """Логины соавторов на count коммитов в порядке использования."""
     singles, pool, info = resolve_coauthors(
-        friends, use_bots, use_celebs, author["login"], token, log
+        friends, use_bots, use_celebs, author_login, token, log
     )
     if not singles and not pool:
         raise RuntimeError("Не осталось ни одного валидного соавтора")
-    if has_open_pair_pr(owner, name, token):
-        # повторный прогон после падения: незакрытый Pair PR значит, что его
-        # коммиты уже на GitHub и в следующий заход досчитаются сами
-        log("Pair: найден открытый PR прошлого прогона, пропускаем фазу")
-        return 0
-
-    def trailer(login: str) -> str:
-        user = info[login]
-        # в имени соавтора может оказаться перевод строки — ломал бы формат трейлера
-        display = str(user.get("name") or login).replace("\n", " ").strip()
-        return (
-            f"Co-authored-by: {display} <{user['id']}+{login}@users.noreply.github.com>"
-        )
-
-    base = default_branch(owner, name, token)
-    created = 0
-    for i in range(commits):
+    queue: list[str] = []
+    for i in range(count):
         if i < len(singles):
-            login = singles[i]
+            queue.append(singles[i])
         elif pool and not use_celebs:
-            login = random.choice(pool)
+            # пул из одних сервисных аккаунтов — повторы разрешены
+            queue.append(random.choice(pool))
         elif i - len(singles) < len(pool):
-            login = pool[i - len(singles)]
+            queue.append(pool[i - len(singles)])
         else:
             log("Pair: соавторы кончились, повторы отключены")
             break
-        branch = make_branch(
-            owner, name, token, "greenhub-pair", head_sha(owner, name, base, token)
+    return queue, info
+
+
+def trailer(login: str, info: dict[str, dict[str, Any]]) -> str:
+    user = info[login]
+    # в имени соавтора может оказаться перевод строки — ломал бы формат трейлера
+    display = str(user.get("name") or login).replace("\n", " ").strip()
+    return f"Co-authored-by: {display} <{user['id']}+{login}@users.noreply.github.com>"
+
+
+def run_prs(
+    repo_url: str,
+    token: str,
+    plan_: dict[str, Any],
+    targets: dict[date, int],
+    langs: list[str],
+    log: Log,
+) -> None:
+    """PR-фаза: Pair, Pull Shark и одиночный YOLO одним локальным клоном.
+
+    Каждый PR несёт один сниппет-коммит с датой из свободного дня плана:
+    дни раздаются от свежих (не позже сегодня) к прошлым, Pair первым,
+    Pull Shark дальше в прошлое. Кончились дни — остаток тира добирается
+    следующими прогонами.
+    """
+    owner, name = owner_repo(repo_url)
+    need_pair = plan_["pair"]
+    need_shark = min(plan_["pull_shark"], MAX_PRS_PER_RUN)
+    need_yolo = 1 if plan_["yolo"] and not (need_pair or need_shark) else 0
+
+    pair_logins: list[str] = []
+    info: dict[str, dict[str, Any]] = {}
+    if need_pair and has_open_pair_pr(owner, name, token):
+        # повторный прогон после падения: незакрытый Pair PR значит, что его
+        # коммиты уже на GitHub и в следующий заход досчитаются сами
+        log("Pair: найден открытый PR прошлого прогона, пропускаем фазу")
+        need_pair = 0
+    if need_pair:
+        author = current_user(token)
+        pair_logins, info = coauthor_queue(
+            plan_["friends"],
+            plan_["use_bots"],
+            plan_["use_celebs"],
+            author["login"],
+            need_pair,
+            token,
+            log,
         )
-        message = f"Pair {i + 1}\n\n{trailer(login)}"
-        readme_commit(owner, name, branch, token, message)
+    if not (pair_logins or need_shark or need_yolo):
+        return
+
+    base = default_branch(owner, name, token)
+    with tempfile.TemporaryDirectory(prefix="greenhub-ach-") as work:
+        repo = str(Path(work) / "repo")
+        core.clone_repo(repo_url, token, repo, log)
+        core.configure_git_user(repo, token, log)
+        existing = core.existing_commits(repo)
+        counts = core.file_counts(repo, langs)
         try:
-            open_and_merge(owner, name, branch, token, f"Pair {i + 1}", base)
-        except ApiError as exc:
-            # чаще всего конфликт README с соседним мержем: ветка бесплатна,
-            # пересоздаём её от свежей дефолтной и повторяем один раз
-            log(f"Pair {i + 1}: мерж не удался ({exc}), повторяем на новой ветке")
-            delete_ref(owner, name, branch, token)
-            branch = make_branch(
-                owner, name, token, "greenhub-pair", head_sha(owner, name, base, token)
+            base_sha = core.git(repo, "rev-parse", "HEAD").strip()
+        except RuntimeError:
+            # пустой репозиторий: PR нужна база — стартовый коммит старой
+            # датой и без привязки к аккаунту, чтобы не красить таймлайн
+            stamp = "2001-01-01T12:00:00"
+            core.git(
+                repo,
+                "-c",
+                "user.name=greenhub",
+                "-c",
+                "user.email=greenhub@localhost",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "Init",
+                extra_env={"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
             )
-            readme_commit(owner, name, branch, token, message)
-            open_and_merge(owner, name, branch, token, f"Pair {i + 1}", base)
-        created += 1
-        if created % 10 == 0:
-            log(f"Pair: {created}/{commits} co-authored коммитов")
-    log(f"Pair: {created} co-authored коммитов в смердженных PR")
-    return created
+            core.git(repo, "push", "-q", "origin", f"HEAD:refs/heads/{base}")
+            base_sha = core.git(repo, "rev-parse", "HEAD").strip()
+
+        today = date.today()
+        days = [
+            day
+            for day in sorted(targets, reverse=True)
+            if day <= today and targets[day] > existing[day]
+        ]
+        if len(days) < len(pair_logins):
+            log(
+                f"Pair: свободных дней в плане {len(days)} на {len(pair_logins)} "
+                "соавторов, лишние ждут следующего прогона"
+            )
+            pair_logins = pair_logins[: len(days)]
+        shark_days = days[len(pair_logins) : len(pair_logins) + need_shark]
+        if need_shark and len(shark_days) < need_shark:
+            log(
+                f"Pull Shark: дней хватило на {len(shark_days)} из {need_shark}, "
+                "остаток следующим прогоном"
+            )
+        yolo_days = days[len(pair_logins) + len(shark_days) :][:need_yolo]
+        if need_yolo and not yolo_days:
+            log("YOLO: в плане нет свободного дня, пропускаем")
+
+        jobs: list[tuple[date, str, str | None]] = [
+            (day, f"Pair {i + 1}", trailer(login, info))
+            for i, (day, login) in enumerate(zip(days, pair_logins))
+        ]
+        jobs += [(day, f"Pull Shark {i + 1}", None) for i, day in enumerate(shark_days)]
+        jobs += [(day, "YOLO", None) for day in yolo_days]
+
+        for done, (day, title, coauthor) in enumerate(jobs, 1):
+            # наименее заполненный язык — чтобы веса языков оставались равными
+            lang = min(langs, key=lambda l: (counts[l], random.random()))
+            counts[lang] += 1
+            core.git(repo, "checkout", "-q", "--detach", base_sha)
+            core.make_commit(repo, lang, day, existing[day], coauthor)
+            existing[day] += 1
+            branch = f"greenhub-{today.isoformat()}-{random.getrandbits(32):08x}"
+            core.git(repo, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+            open_and_merge(owner, name, branch, token, title, base, log)
+            if done % 10 == 0:
+                log(f"PR-мерджи: {done}/{len(jobs)}")
+
+    if pair_logins:
+        log(f"Pair: {len(pair_logins)} co-authored коммитов в смердженных PR")
+    if shark_days:
+        log(f"Pull Shark: смерджено {len(shark_days)} PR")
+    if yolo_days:
+        log("YOLO: PR смерджен без ревью")
 
 
 def plan(params: dict[str, Any], repo_url: str, token: str, log: Log) -> dict[str, Any]:
@@ -507,36 +530,22 @@ def plan(params: dict[str, Any], repo_url: str, token: str, log: Log) -> dict[st
 
 
 def run_achievements(
-    repo_url: str, token: str, params: dict[str, Any], log: Log
+    repo_url: str,
+    token: str,
+    params: dict[str, Any],
+    targets: dict[date, int],
+    langs: list[str],
+    log: Log,
 ) -> None:
     """Прогон ачивок по плану. YOLO выпадает само на первом же мерже."""
     owner, name = owner_repo(repo_url)
     plan_ = plan(params, repo_url, token, log)
     if plan_["quickdraw"]:
         run_quickdraw(owner, name, token, log)
-    if plan_["pull_shark"]:
-        run_pull_shark(repo_url, token, min(plan_["pull_shark"], MAX_PRS_PER_RUN), log)
-    if plan_["pair"]:
-        run_pair(
-            repo_url,
-            token,
-            plan_["pair"],
-            plan_["friends"],
-            plan_["use_bots"],
-            plan_["use_celebs"],
-            log,
-        )
-    if plan_["yolo"]:
-        if plan_["pull_shark"] or plan_["pair"]:
-            log("YOLO: засчитается на первом мерже этого прогона")
-        else:
-            base = default_branch(owner, name, token)
-            branch = make_branch(
-                owner, name, token, "greenhub-yolo", head_sha(owner, name, base, token)
-            )
-            readme_commit(owner, name, branch, token, "YOLO")
-            open_and_merge(owner, name, branch, token, "YOLO", base)
-            log("YOLO: PR смерджен без ревью")
+    if plan_["yolo"] and (plan_["pull_shark"] or plan_["pair"]):
+        log("YOLO: засчитается на первом мерже этого прогона")
+    if plan_["pull_shark"] or plan_["pair"] or plan_["yolo"]:
+        run_prs(repo_url, token, plan_, targets, langs, log)
     log(
         "Ачивки начисляются GitHub с задержкой — проверьте профиль через несколько часов"
     )

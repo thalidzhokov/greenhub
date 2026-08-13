@@ -172,7 +172,9 @@ def file_counts(repo: str, langs: list[str]) -> dict[str, int]:
 SEED_LINE_WIDTH = 31
 
 
-def make_commit(repo: str, lang: str, day: date, index: int) -> None:
+def make_commit(
+    repo: str, lang: str, day: date, index: int, trailer: str | None = None
+) -> None:
     ext, opener, closer, code = LANGUAGES[lang]
     # строка добивается знаками "=" до общей ширины, чтобы файлы всех
     # языков были байт-в-байт одного размера
@@ -185,13 +187,16 @@ def make_commit(repo: str, lang: str, day: date, index: int) -> None:
     Path(repo, ext).mkdir(exist_ok=True)
     Path(repo, filename).write_text(body, encoding="utf-8", newline="\n")
     stamp = (datetime.combine(day, time(12, 0)) + timedelta(minutes=index)).isoformat()
+    message = f"Add {filename}"
+    if trailer:
+        message += f"\n\n{trailer}"
     git(repo, "add", "-A")
     git(
         repo,
         "commit",
         "-q",
         "-m",
-        f"Add {filename}",
+        message,
         extra_env={"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp},
     )
 
