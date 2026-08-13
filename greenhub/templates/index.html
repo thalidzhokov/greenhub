@@ -168,7 +168,7 @@
 
     <div class="field">
       <span>Ачивки профиля</span>
-      <div class="checks">
+      <div class="checks column">
         <label><input id="ach-quickdraw" type="checkbox"> Quickdraw — issue, закрытый за 5 минут</label>
         <label><input id="ach-yolo" type="checkbox"> YOLO — мерж PR без ревью</label>
       </div>
@@ -203,7 +203,7 @@
     <div id="pair-options" class="hidden">
       <div class="field">
         <span>Соавторы — по одному на коммит</span>
-        <div class="checks">
+        <div class="checks column">
           <label><input type="checkbox" checked disabled> {{ owner_coauthor }} — первый коммит, один раз</label>
           <label><input id="ach-bots" type="checkbox" checked> сервисные аккаунты ({{ bots_count }})</label>
           <label><input id="ach-celebs" type="checkbox"> знаменитости ({{ celebs_count }})</label>
@@ -212,12 +212,12 @@
         <details class="hint">
           <summary>В каком порядке берутся соавторы?</summary>
           <p>
-            Первый co-authored коммит прогона - с {{ owner_coauthor }} (если пушит он сам, GitHub сольёт трейлер в обычный коммит, поэтому он пропускается).
+            Первый co-authored коммит прогона - с {{ owner_coauthor }}.
             Дальше знакомые из поля - по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
             Повторы возможны, только когда выбраны одни сервисные аккаунты - со знаменитостями каждое имя используется не более одного раза.
           </p>
           <p>
-            Соавторство засчитывается только с аккаунтами пользователей: организации и [bot]-аккаунты GitHub не привязывает к трейлеру.
+            Соавторство засчитывается только с аккаунтами пользователей: организации и боты GitHub не привязывает к трейлеру.
             Перед прогоном каждый логин проверяется через API, неподходящие пропускаются с записью в лог.
           </p>
         </details>

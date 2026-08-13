@@ -51,6 +51,7 @@ input:focus { outline: 2px solid #1f883d33; border-color: #1f883d; }
 #text:invalid { border-color: #d1242f; outline-color: #d1242f33; }
 
 .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
+.checks.column { flex-direction: column; }
 .checks label { white-space: nowrap; cursor: pointer; }
 .inline { font-size: 14px; font-weight: 400; }
 
