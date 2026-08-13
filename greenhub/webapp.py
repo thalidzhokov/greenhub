@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Callable
 from datetime import date
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, render_template, request
 
@@ -18,6 +19,14 @@ app = Flask(__name__)
 
 MAX_COMMITS = 99
 MAX_TEXT_LEN = 1000
+# токен вставляется в URL и уходит хосту репозитория
+# разрешаем только github.com
+ALLOWED_HOSTS = {
+    "github.com",
+    # "gitlab.com",
+    # "codeberg.org",
+    # "gitee.com",
+}
 FONTS = available_fonts()
 DEFAULT_FONT = "5x7-pixel-slanted"
 
@@ -44,6 +53,13 @@ def repo_params(payload: dict[str, Any]) -> tuple[str, str, str | None]:
     token = str(payload.get("token", "")).strip()
     if not repo.startswith("https://"):
         return repo, token, "URL репозитория должен начинаться с https://"
+    try:
+        host = urlsplit(repo).hostname
+    except ValueError:
+        host = None
+    if host not in ALLOWED_HOSTS:
+        allowed = ", ".join(sorted(ALLOWED_HOSTS))
+        return repo, token, f"Хост репозитория не поддерживается, разрешены: {allowed}"
     if not token:
         return repo, token, "Укажите токен"
     return repo, token, None
@@ -54,7 +70,9 @@ def scrub(message: str, token: str) -> str:
     return message.replace(token, "***") if token else message
 
 
-def validate(payload: dict[str, Any], need_repo: bool) -> tuple[dict[str, Any] | None, str | None]:
+def validate(
+    payload: dict[str, Any], need_repo: bool
+) -> tuple[dict[str, Any] | None, str | None]:
     """Проверяет параметры формы. Возвращает (параметры, None) или (None, ошибка)."""
     repo, token, repo_error = repo_params(payload)
     params: dict[str, Any] = {"repo": repo, "token": token}
