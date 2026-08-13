@@ -47,7 +47,7 @@
             <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → Generate new token.
             Настройки:
             <ul>
-              <li>Repository access -> Only select repositories -> выбрать репозиторий для коммитов (напр., greenhub-repo);</li>
+              <li>Repository access -> Only select repositories -> выбрать репозиторий для коммитов указанный в <a href="#repo">URL репозитория</a>;</li>
               <li>Permissions -> Repository permissions -> Contents -> Access: Read and write 
                 <p>Дополнительно для ачивок: </p>
                 <ul>
@@ -60,7 +60,7 @@
           <li>
             <strong>Classic PAT:</strong>
             <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a> → Generate new token (classic) → scope repo.
-            Минус — даёт доступ ко всем вашим репозиториям сразу.
+            Минус - даёт доступ ко всем вашим репозиториям сразу.
           </li>
         </ol>
       </details>
@@ -211,9 +211,9 @@
         <details class="hint">
           <summary>В каком порядке берутся соавторы?</summary>
           <p>
-            Первый co-authored коммит прогона — с {{ owner_coauthor }} (если пушит он сам, GitHub сольёт трейлер в обычный коммит, поэтому он пропускается).
-            Дальше знакомые из поля — по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
-            Повторы возможны, только когда выбраны одни сервисные аккаунты — со знаменитостями каждое имя используется не более одного раза.
+            Первый co-authored коммит прогона - с {{ owner_coauthor }} (если пушит он сам, GitHub сольёт трейлер в обычный коммит, поэтому он пропускается).
+            Дальше знакомые из поля - по списку, каждый по разу. Затем случайный выбор из отмеченных групп, перемешанных вместе.
+            Повторы возможны, только когда выбраны одни сервисные аккаунты - со знаменитостями каждое имя используется не более одного раза.
           </p>
           <p>
             Соавторство засчитывается только с аккаунтами пользователей: организации и [bot]-аккаунты GitHub не привязывает к трейлеру.
