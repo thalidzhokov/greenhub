@@ -158,6 +158,27 @@ def current_user(token: str) -> dict[str, Any]:
     return {"login": user["login"], "name": user.get("name") or user["login"]}
 
 
+def probe_permissions(repo_url: str, token: str) -> dict[str, bool]:
+    """Проверяет доступ токена к областям Contents, Issues и Pull requests.
+
+    Пробы — безопасные GET: fine-grained токен без права на область отвечает
+    401/403. Отличить read от write без побочных эффектов нельзя, поэтому
+    нехватка именно write всплывёт позже, в логе прогона.
+    """
+    owner, name = owner_repo(repo_url)
+    probes = {
+        # 404 не считается отказом: в пустом репозитории нет README,
+        # но право Contents при этом есть
+        "contents": f"/repos/{owner}/{name}/contents/README.md",
+        "issues": f"/repos/{owner}/{name}/issues?per_page=1",
+        "pulls": f"/repos/{owner}/{name}/pulls?per_page=1",
+    }
+    return {
+        key: api("GET", path, token, ignore_errors=True)[0] not in (401, 403)
+        for key, path in probes.items()
+    }
+
+
 def merged_prs(owner: str, name: str, token: str) -> int:
     # ачивка считает только PR самого автора — чужие мерджи в репо не в счёт
     login = current_user(token)["login"]

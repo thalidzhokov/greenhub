@@ -290,11 +290,26 @@ def check():
         return jsonify({"error": error}), 400
     try:
         branch, heads = core.ls_remote(repo, token)
+        perms = achievements.probe_permissions(repo, token)
     except Exception as exc:
         return jsonify({"error": scrub(str(exc), token)}), 400
-    if heads == 0:
-        return jsonify({"message": "Репозиторий доступен, он пуст"})
-    return jsonify({"message": f"Репозиторий доступен, ветка по умолчанию: {branch}"})
+    labels = {"contents": "Contents", "issues": "Issues", "pulls": "Pull requests"}
+    state = ", ".join(
+        f"{label}: {'да' if perms[key] else 'нет'}" for key, label in labels.items()
+    )
+    lines = [
+        "Репозиторий доступен, он пуст"
+        if heads == 0
+        else f"Репозиторий доступен, ветка по умолчанию: {branch}",
+        f"Права токена: {state}",
+    ]
+    if not perms["contents"]:
+        lines.append("Нет доступа к Contents — пуш и очистка недоступны")
+    if not (perms["issues"] and perms["pulls"]):
+        lines.append(
+            "Ачивки отключены: токену нужны Issues и Pull requests (Read and write)"
+        )
+    return jsonify({"message": "\n".join(lines), "permissions": perms})
 
 
 def start_job(fn: Callable[[core.Log], int | None], token: str) -> str:

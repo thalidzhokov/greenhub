@@ -42,8 +42,13 @@ $("random").addEventListener("change", () => {
 });
 
 function syncAchievements() {
-  $("ach-shark-tier").disabled = !$("ach-shark").checked;
-  $("ach-pair-tier").disabled = !$("ach-pair").checked;
+  // права токена неизвестны до проверки репо — тогда блок доступен как раньше
+  const achOk = !perms || (perms.issues && perms.pulls);
+  for (const id of ["ach-quickdraw", "ach-yolo", "ach-shark", "ach-pair", "ach-friends", "ach-bots", "ach-celebs"]) {
+    $(id).disabled = !achOk;
+  }
+  $("ach-shark-tier").disabled = !achOk || !$("ach-shark").checked;
+  $("ach-pair-tier").disabled = !achOk || !$("ach-pair").checked;
   $("pair-options").classList.toggle("hidden", !$("ach-pair").checked);
 }
 
@@ -100,18 +105,22 @@ $("text").addEventListener("input", () => {
 
 let running = false;
 let repoVerified = false; // репозиторий успешно проверен для текущих URL и токена
+let perms = null; // права токена из последней проверки репо, null — не проверялись
 
 function updateButtons() {
   const hasCreds = $("repo").value.trim() && $("token").value.trim();
+  const contentsOk = !perms || perms.contents;
   $("preview-btn").disabled = running;
   $("check-btn").disabled = running || !hasCreds;
-  $("clear-btn").disabled = running || !repoVerified;
-  $("push-btn").disabled = running || !repoVerified;
+  $("clear-btn").disabled = running || !repoVerified || !contentsOk;
+  $("push-btn").disabled = running || !repoVerified || !contentsOk;
 }
 
 for (const id of ["repo", "token"]) {
   $(id).addEventListener("input", () => {
     repoVerified = false;
+    perms = null;
+    syncAchievements();
     updateButtons();
   });
 }
@@ -149,10 +158,12 @@ function collectParams() {
     params.text = $("text").value;
     params.font = $("font").value;
   }
-  params.ach_quickdraw = $("ach-quickdraw").checked;
-  params.ach_yolo = $("ach-yolo").checked;
-  params.ach_shark_tier = $("ach-shark").checked ? $("ach-shark-tier").value : null;
-  params.ach_pair_tier = $("ach-pair").checked ? $("ach-pair-tier").value : null;
+  // заблокированный из-за прав токена блок ачивок в прогон не попадает
+  const achEnabled = !$("ach-quickdraw").disabled;
+  params.ach_quickdraw = achEnabled && $("ach-quickdraw").checked;
+  params.ach_yolo = achEnabled && $("ach-yolo").checked;
+  params.ach_shark_tier = achEnabled && $("ach-shark").checked ? $("ach-shark-tier").value : null;
+  params.ach_pair_tier = achEnabled && $("ach-pair").checked ? $("ach-pair-tier").value : null;
   params.ach_friends = $("ach-friends").value;
   params.ach_bots = $("ach-bots").checked;
   params.ach_celebs = $("ach-celebs").checked;
@@ -391,10 +402,13 @@ $("check-btn").addEventListener("click", async () => {
     });
     logEl.textContent += `\n${data.message}`;
     repoVerified = true;
+    perms = data.permissions || null;
   } catch (exc) {
     logEl.textContent += `\nОшибка: ${exc.message}`;
     repoVerified = false;
+    perms = null;
   }
+  syncAchievements();
   updateButtons();
 });
 
