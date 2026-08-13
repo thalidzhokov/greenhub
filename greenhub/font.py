@@ -22,19 +22,35 @@ def available_fonts() -> dict[str, str]:
     return fonts
 
 
+def _header_chars(line: str) -> list[str] | None:
+    """Символы строки-заголовка блока или None, если строка не заголовок."""
+    chars = line.split()
+    if chars and all(len(c) == 1 and c.isalnum() for c in chars):
+        return chars
+    return None
+
+
+def _glyph_block(lines: list[str], width: int) -> list[list[str]] | None:
+    """7 строк матриц по width колонок из '#' и '.' или None, если блок не подходит."""
+    block = [row.split() for row in lines]
+    if len(block) != ROWS:
+        return None
+    for row in block:
+        if len(row) != width or not all(set(cell) <= {"#", "."} for cell in row):
+            return None
+    return block
+
+
 def load_font(path: Path) -> dict[str, Glyph]:
     """Разбирает glyphs.txt: строка-заголовок с символами, под ней 7 строк матриц."""
     lines = path.read_text(encoding="utf-8").splitlines()
     font: dict[str, Glyph] = {}
     for i, line in enumerate(lines):
-        chars = line.split()
-        if not chars or not all(len(c) == 1 and c.isalnum() for c in chars):
+        chars = _header_chars(line)
+        if chars is None:
             continue
-        block = [row.split() for row in lines[i + 1 : i + 1 + ROWS]]
-        if len(block) != ROWS or any(
-            len(row) != len(chars) or not all(set(cell) <= {"#", "."} for cell in row)
-            for row in block
-        ):
+        block = _glyph_block(lines[i + 1 : i + 1 + ROWS], len(chars))
+        if block is None:
             continue
         for col, ch in enumerate(chars):
             font[ch] = [row[col] for row in block]

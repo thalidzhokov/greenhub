@@ -97,13 +97,28 @@ def filled(px: float, py: float, contours) -> bool:
     return w != 0
 
 
+def contour_center(pts: list[tuple[float, float]]) -> tuple[float, float]:
+    return sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)
+
+
+def dot_glyph(pts, brick: float, cy_max: float, pad_top: int) -> list[str]:
+    """Матрица одного глифа по центрам его контуров-точек."""
+    cx_min = min(cx for cx, _ in pts)
+    cells = {
+        (round((cy_max - cy) / brick) + pad_top, round((cx - cx_min) / brick))
+        for cx, cy in pts
+    }
+    width = max(c for _, c in cells) + 1
+    return [
+        "".join("#" if (r, c) in cells else "." for c in range(width))
+        for r in range(ROWS)
+    ]
+
+
 def build_from_dots(outlines: dict[str, list]) -> tuple[dict[str, list[str]], int] | None:
     """Для шрифтов из отдельных точек: клетка = центр контура-точки."""
     centers = {
-        ch: [
-            (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts))
-            for pts in contours
-        ]
+        ch: [contour_center(pts) for pts in contours]
         for ch, contours in outlines.items()
     }
     all_cy = [cy for pts in centers.values() for _, cy in pts]
@@ -115,29 +130,18 @@ def build_from_dots(outlines: dict[str, list]) -> tuple[dict[str, list[str]], in
         return None
 
     pad_top = (ROWS - rows + 1) // 2
-    glyphs: dict[str, list[str]] = {}
-    for ch, pts in centers.items():
-        cx_min = min(cx for cx, _ in pts)
-        cells = {
-            (round((cy_max - cy) / brick) + pad_top, round((cx - cx_min) / brick))
-            for cx, cy in pts
-        }
-        width = max(c for _, c in cells) + 1
-        glyphs[ch] = [
-            "".join("#" if (r, c) in cells else "." for c in range(width))
-            for r in range(ROWS)
-        ]
+    glyphs = {ch: dot_glyph(pts, brick, cy_max, pad_top) for ch, pts in centers.items()}
     return glyphs, rows
 
 
-def build_font(otf_path: Path) -> tuple[dict[str, list[str]], int] | None:
+def collect_outlines(otf_path: Path) -> tuple[dict[str, list], list[float]] | None:
+    """Контуры всех символов и y опорных точек; None, если символ отсутствует или пуст."""
     font = TTFont(otf_path)
     cmap = font.getBestCmap() or {}
     glyph_set = font.getGlyphSet()
 
     outlines: dict[str, list] = {}
-    all_x: list[float] = []
-    all_y: list[float] = []
+    anchor_ys: list[float] = []
     for ch in CHARS:
         if ord(ch) not in cmap:
             print(f"  нет символа {ch!r}")
@@ -149,14 +153,45 @@ def build_font(otf_path: Path) -> tuple[dict[str, list[str]], int] | None:
             print(f"  пустой глиф {ch!r}")
             return None
         outlines[ch] = contours
-        all_x += [x for x, _ in pen.anchors]
-        all_y += [y for _, y in pen.anchors]
+        anchor_ys += [y for _, y in pen.anchors]
+    return outlines, anchor_ys
+
+
+def rasterize_glyph(
+    contours, brick: float, ymax: float, rows: int, pad_top: int
+) -> list[str]:
+    """Матрица одного глифа: сэмплирует центры клеток сетки по контурам."""
+    xs = [x for pts in contours for x, _ in pts]
+    # допуск на накопленную ошибку округления координат (шаг может быть дробным)
+    c0 = math.floor(min(xs) / brick + 0.05)
+    c1 = math.ceil(max(xs) / brick - 0.05)
+    width = c1 - c0
+    matrix = []
+    for r in range(ROWS):
+        fr = r - pad_top
+        if not 0 <= fr < rows:
+            matrix.append("." * width)
+            continue
+        py = ymax - (fr + 0.5) * brick
+        row = "".join(
+            "#" if filled((c0 + c + 0.5) * brick, py, contours) else "."
+            for c in range(width)
+        )
+        matrix.append(row)
+    return matrix
+
+
+def build_font(otf_path: Path) -> tuple[dict[str, list[str]], int] | None:
+    collected = collect_outlines(otf_path)
+    if collected is None:
+        return None
+    outlines, anchor_ys = collected
 
     try:
-        brick = grid_step(all_y)
+        brick = grid_step(anchor_ys)
     except ValueError:
         return build_from_dots(outlines)
-    ymin, ymax = min(all_y), max(all_y)
+    ymin, ymax = min(anchor_ys), max(anchor_ys)
     rows = round((ymax - ymin) / brick)
     caps_y = [y for ch in "AEM0" for pts in outlines[ch] for _, y in pts]
     caps_rows = round((max(caps_y) - min(caps_y)) / brick)
@@ -165,26 +200,10 @@ def build_font(otf_path: Path) -> tuple[dict[str, list[str]], int] | None:
         return None
 
     pad_top = (ROWS - rows + 1) // 2
-    glyphs: dict[str, list[str]] = {}
-    for ch, contours in outlines.items():
-        xs = [x for pts in contours for x, _ in pts]
-        # допуск на накопленную ошибку округления координат (шаг может быть дробным)
-        c0 = math.floor(min(xs) / brick + 0.05)
-        c1 = math.ceil(max(xs) / brick - 0.05)
-        width = c1 - c0
-        matrix = []
-        for r in range(ROWS):
-            fr = r - pad_top
-            if not 0 <= fr < rows:
-                matrix.append("." * width)
-                continue
-            py = ymax - (fr + 0.5) * brick
-            row = "".join(
-                "#" if filled((c0 + c + 0.5) * brick, py, contours) else "."
-                for c in range(width)
-            )
-            matrix.append(row)
-        glyphs[ch] = matrix
+    glyphs = {
+        ch: rasterize_glyph(contours, brick, ymax, rows, pad_top)
+        for ch, contours in outlines.items()
+    }
     return glyphs, rows
 
 

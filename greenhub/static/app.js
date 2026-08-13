@@ -165,51 +165,51 @@ function sundayOf(d) {
   return s;
 }
 
-function buildCalendar(first, last, days, maxCount, title) {
-  const cal = el("div", "calendar");
-  cal.append(el("div", "cal-title", title));
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
 
-  const body = el("div", "cal-body");
-  const months = el("div", "months");
-  const grid = el("div", "cal-grid");
+function dayCell(day, first, last, days, maxCount) {
+  const cell = el("span", "day");
+  if (day < first || day > last) {
+    cell.classList.add("blank");
+    return cell;
+  }
+  const key = iso(day);
+  const count = days[key] || 0;
+  cell.dataset.level = levelOf(count, maxCount);
+  cell.title = count
+    ? `${key}: ${count} ${plural(count, COMMIT_FORMS)}`
+    : `${key}: нет коммитов`;
+  return cell;
+}
+
+function buildWeek(weekStart, first, last, days, maxCount) {
+  const week = el("div", "week");
+  for (let d = 0; d < 7; d++) {
+    week.append(dayCell(addDays(weekStart, d), first, last, days, maxCount));
+  }
+  return week;
+}
+
+// месяц первого непустого дня недели, -1 если вся неделя вне диапазона
+function firstVisibleMonth(weekStart, first, last) {
+  for (let d = 0; d < 7; d++) {
+    const day = addDays(weekStart, d);
+    if (day >= first && day <= last) return day.getMonth();
+  }
+  return -1;
+}
+
+function buildWeekdayLabels() {
   const wdLabels = el("div", "wd-labels");
   ["", "пн", "", "ср", "", "пт", ""].forEach((t) => wdLabels.append(el("span", "wd", t)));
-  const weeks = el("div", "weeks");
+  return wdLabels;
+}
 
-  let prevMonth = -1;
-  let col = 0;
-  for (let w = sundayOf(first); w <= last; w.setDate(w.getDate() + 7), col++) {
-    const week = el("div", "week");
-    let firstVisibleMonth = -1;
-    for (let d = 0; d < 7; d++) {
-      const day = new Date(w);
-      day.setDate(day.getDate() + d);
-      const cell = el("span", "day");
-      if (day < first || day > last) {
-        cell.classList.add("blank");
-      } else {
-        if (firstVisibleMonth < 0) firstVisibleMonth = day.getMonth();
-        const key = iso(day);
-        const count = days[key] || 0;
-        cell.dataset.level = levelOf(count, maxCount);
-        cell.title = count
-          ? `${key}: ${count} ${plural(count, COMMIT_FORMS)}`
-          : `${key}: нет коммитов`;
-      }
-      week.append(cell);
-    }
-    if (firstVisibleMonth >= 0 && firstVisibleMonth !== prevMonth) {
-      const label = el("span", null, MONTHS[firstVisibleMonth]);
-      label.style.left = `${col * CELL_STEP}px`;
-      months.append(label);
-      prevMonth = firstVisibleMonth;
-    }
-    weeks.append(week);
-  }
-
-  grid.append(wdLabels, weeks);
-  body.append(months, grid);
-
+function buildLegend() {
   const legend = el("div", "legend", "меньше");
   for (let i = 0; i <= 4; i++) {
     const cell = el("span", "day");
@@ -217,10 +217,66 @@ function buildCalendar(first, last, days, maxCount, title) {
     legend.append(cell);
   }
   legend.append("больше");
-  body.append(legend);
+  return legend;
+}
 
-  cal.append(body);
+function buildCalendar(first, last, days, maxCount, title) {
+  const months = el("div", "months");
+  const weeks = el("div", "weeks");
+  let prevMonth = -1;
+  let col = 0;
+  for (let w = sundayOf(first); w <= last; w = addDays(w, 7), col++) {
+    weeks.append(buildWeek(w, first, last, days, maxCount));
+    const month = firstVisibleMonth(w, first, last);
+    if (month >= 0 && month !== prevMonth) {
+      const label = el("span", null, MONTHS[month]);
+      label.style.left = `${col * CELL_STEP}px`;
+      months.append(label);
+      prevMonth = month;
+    }
+  }
+
+  const grid = el("div", "cal-grid");
+  grid.append(buildWeekdayLabels(), weeks);
+  const body = el("div", "cal-body");
+  body.append(months, grid, buildLegend());
+  const cal = el("div", "calendar");
+  cal.append(el("div", "cal-title", title), body);
   return cal;
+}
+
+function yearCalendar(year, days, dates, maxCount) {
+  const yearTotal = dates
+    .filter((d) => Number(d.slice(0, 4)) === year)
+    .reduce((sum, d) => sum + days[d], 0);
+  return buildCalendar(
+    new Date(year, 0, 1),
+    new Date(year, 11, 31),
+    days,
+    maxCount,
+    `${year} — ${yearTotal} ${plural(yearTotal, COMMIT_FORMS)}`
+  );
+}
+
+function buildCalendars(days, dates) {
+  const maxCount = Math.max(...Object.values(days));
+  const first = fromIso(dates[0]);
+  const last = fromIso(dates[dates.length - 1]);
+  const spanDays = (last - first) / 86400000;
+  const today = new Date();
+
+  if (spanDays <= 371 && last <= today) {
+    // диапазон до года в прошлом — один календарь «последний год», как на профиле GitHub
+    const rollingStart = addDays(today, -364);
+    const gridFirst = first < rollingStart ? first : rollingStart;
+    return [buildCalendar(gridFirst, today, days, maxCount, "Последний год")];
+  }
+  // план шире года или уходит в будущее — отдельный календарь на каждый год
+  const calendars = [];
+  for (let year = first.getFullYear(); year <= last.getFullYear(); year++) {
+    calendars.push(yearCalendar(year, days, dates, maxCount));
+  }
+  return calendars;
 }
 
 function renderPreview(data) {
@@ -236,36 +292,7 @@ function renderPreview(data) {
     container.append(el("p", "muted", "Ни один день не попадает в диапазон до сегодняшней даты."));
     return;
   }
-
-  const maxCount = Math.max(...Object.values(days));
-  const first = fromIso(dates[0]);
-  const last = fromIso(dates[dates.length - 1]);
-  const spanDays = (last - first) / 86400000;
-  const today = new Date();
-
-  if (spanDays <= 371 && last <= today) {
-    // диапазон до года в прошлом — один календарь «последний год», как на профиле GitHub
-    const rollingStart = new Date(today);
-    rollingStart.setDate(rollingStart.getDate() - 364);
-    const gridFirst = first < rollingStart ? first : rollingStart;
-    container.append(buildCalendar(gridFirst, today, days, maxCount, "Последний год"));
-  } else {
-    // план шире года или уходит в будущее — отдельный календарь на каждый год
-    for (let year = first.getFullYear(); year <= last.getFullYear(); year++) {
-      const yearTotal = dates
-        .filter((d) => Number(d.slice(0, 4)) === year)
-        .reduce((sum, d) => sum + days[d], 0);
-      container.append(
-        buildCalendar(
-          new Date(year, 0, 1),
-          new Date(year, 11, 31),
-          days,
-          maxCount,
-          `${year} — ${yearTotal} ${plural(yearTotal, COMMIT_FORMS)}`
-        )
-      );
-    }
-  }
+  container.append(...buildCalendars(days, dates));
 }
 
 $("preview-btn").addEventListener("click", async () => {

@@ -70,70 +70,106 @@ def scrub(message: str, token: str) -> str:
     return message.replace(token, "***") if token else message
 
 
+def commit_range(payload: dict[str, Any]) -> tuple[tuple[int, int] | None, str | None]:
+    """Число коммитов на день: ((низ, верх), None) или (None, ошибка)."""
+    if payload.get("random", True):
+        low = to_int(payload.get("min_commits", 1))
+        high = to_int(payload.get("max_commits", 5))
+        if low is None or high is None or not 1 <= low < high <= MAX_COMMITS:
+            return None, f"Для случайного режима нужно: 1 ≤ от < до ≤ {MAX_COMMITS}"
+        return (low, high), None
+    commits = to_int(payload.get("commits", 1))
+    if commits is None or not 1 <= commits <= MAX_COMMITS:
+        return None, f"Число коммитов: от 1 до {MAX_COMMITS}"
+    return (commits, commits), None
+
+
+def start_date(payload: dict[str, Any]) -> tuple[date | None, str | None]:
+    start = parse_iso(payload.get("start_date"))
+    if start is None:
+        return None, "Некорректная дата начала"
+    if start > date.today():
+        return None, "Дата начала не может быть в будущем"
+    return start, None
+
+
+def fill_params(
+    payload: dict[str, Any], start: date
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Параметры режима fill: дата окончания и дни недели (пн=0..вс=6)."""
+    end = parse_iso(payload.get("end_date"))
+    if end is None:
+        return None, "Некорректная дата окончания"
+    if end < start:
+        return None, "Дата окончания раньше даты начала"
+    if end > date.today():
+        return None, "Дата окончания не может быть в будущем"
+    raw_weekdays = payload.get("weekdays", [])
+    if not isinstance(raw_weekdays, list):
+        return None, "Выберите хотя бы один день недели"
+    raws = cast(list[object], raw_weekdays)
+    weekdays = {(d + 6) % 7 for raw in raws if (d := to_int(raw)) is not None}
+    if not weekdays:
+        return None, "Выберите хотя бы один день недели"
+    return {"end": end, "weekdays": weekdays}, None
+
+
+def text_params(payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Параметры режима text: сам текст и шрифт."""
+    text = str(payload.get("text", "")).strip()
+    if not 1 <= len(text) <= MAX_TEXT_LEN:
+        return None, f"Текст: от 1 до {MAX_TEXT_LEN} символов"
+    font = str(payload.get("font", DEFAULT_FONT))
+    if font not in FONTS:
+        return None, f"Неизвестный шрифт: {font}"
+    return {"text": text, "font": font}, None
+
+
+def mode_params(
+    payload: dict[str, Any], start: date
+) -> tuple[dict[str, Any] | None, str | None]:
+    mode = payload.get("mode")
+    if mode == "fill":
+        return fill_params(payload, start)
+    if mode == "text":
+        return text_params(payload)
+    return None, "Неизвестный режим"
+
+
 def validate(
     payload: dict[str, Any], need_repo: bool
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Проверяет параметры формы. Возвращает (параметры, None) или (None, ошибка)."""
     repo, token, repo_error = repo_params(payload)
-    params: dict[str, Any] = {"repo": repo, "token": token}
     if need_repo and repo_error:
         return None, repo_error
 
     langs = [lang for lang in payload.get("languages", []) if lang in LANGUAGES]
     if not langs:
         return None, f"Выберите хотя бы один язык: {', '.join(sorted(LANGUAGES))}"
-    params["langs"] = langs
 
-    if payload.get("random", True):
-        low = to_int(payload.get("min_commits", 1))
-        high = to_int(payload.get("max_commits", 5))
-        if low is None or high is None or not 1 <= low < high <= MAX_COMMITS:
-            return None, f"Для случайного режима нужно: 1 ≤ от < до ≤ {MAX_COMMITS}"
-    else:
-        commits = to_int(payload.get("commits", 1))
-        if commits is None or not 1 <= commits <= MAX_COMMITS:
-            return None, f"Число коммитов: от 1 до {MAX_COMMITS}"
-        low = high = commits
-    params["low"], params["high"] = low, high
+    limits, error = commit_range(payload)
+    if limits is None:
+        return None, error
 
-    today = date.today()
-    start = parse_iso(payload.get("start_date"))
+    start, error = start_date(payload)
     if start is None:
-        return None, "Некорректная дата начала"
-    if start > today:
-        return None, "Дата начала не может быть в будущем"
-    params["start"] = start
+        return None, error
 
-    mode = payload.get("mode")
-    params["mode"] = mode
-    if mode == "fill":
-        end = parse_iso(payload.get("end_date"))
-        if end is None:
-            return None, "Некорректная дата окончания"
-        if end < start:
-            return None, "Дата окончания раньше даты начала"
-        if end > today:
-            return None, "Дата окончания не может быть в будущем"
-        raw_weekdays = payload.get("weekdays", [])
-        if not isinstance(raw_weekdays, list) or not raw_weekdays:
-            return None, "Выберите хотя бы один день недели"
-        raws = cast(list[object], raw_weekdays)
-        weekdays = {(d + 6) % 7 for raw in raws if (d := to_int(raw)) is not None}
-        if not weekdays:
-            return None, "Выберите хотя бы один день недели"
-        params["end"], params["weekdays"] = end, weekdays
-    elif mode == "text":
-        text = str(payload.get("text", "")).strip()
-        if not 1 <= len(text) <= MAX_TEXT_LEN:
-            return None, f"Текст: от 1 до {MAX_TEXT_LEN} символов"
-        params["text"] = text
-        font = str(payload.get("font", DEFAULT_FONT))
-        if font not in FONTS:
-            return None, f"Неизвестный шрифт: {font}"
-        params["font"] = font
-    else:
-        return None, "Неизвестный режим"
-    return params, None
+    extra, error = mode_params(payload, start)
+    if extra is None:
+        return None, error
+
+    params: dict[str, Any] = {
+        "repo": repo,
+        "token": token,
+        "langs": langs,
+        "low": limits[0],
+        "high": limits[1],
+        "start": start,
+        "mode": payload.get("mode"),
+    }
+    return params | extra, None
 
 
 def make_targets(params: dict[str, Any], rnd: random.Random) -> dict[date, int]:
