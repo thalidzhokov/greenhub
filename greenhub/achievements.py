@@ -526,6 +526,14 @@ def plan(params: dict[str, Any], repo_url: str, token: str, log: Log) -> dict[st
             plan_["pair"] = PAIR_TIERS[params["pair_tier"]]
     else:
         plan_["pair"] = 0
+    if plan_["pull_shark"] and plan_["pair"]:
+        # GitHub засчитает Pair PR в Pull Shark
+        # Если Pair по факту меньше, следующий прогон доберёт
+        plan_["pull_shark"] = max(0, plan_["pull_shark"] - plan_["pair"])
+        log(
+            f"Pull Shark: {plan_['pair']} PR закроет Pair, "
+            f"отдельных нужно {plan_['pull_shark']}"
+        )
     return plan_
 
 
