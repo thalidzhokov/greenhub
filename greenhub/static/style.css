@@ -1,0 +1,159 @@
+:root {
+  /* при изменении поправить CELL_STEP в app.js */
+  --cell: 10px;
+  --gap: 3px;
+  --labels-width: 28px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f6f8fa;
+  color: #1f2328;
+}
+
+main { max-width: 960px; margin: 24px auto 48px; padding: 0 16px; }
+
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 17px; }
+
+.muted { color: #656d76; margin-top: 0; }
+
+.card {
+  background: #fff;
+  border: 1px solid #d1d9e0;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.field { display: block; margin-bottom: 16px; }
+.field > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+
+input[type="text"],
+input[type="password"],
+input[type="date"],
+input[type="number"] {
+  padding: 6px 10px;
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  color: inherit;
+}
+input[type="text"], input[type="password"] { width: 100%; max-width: 480px; }
+input[type="number"] { width: 70px; }
+input:focus { outline: 2px solid #1f883d33; border-color: #1f883d; }
+
+.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
+.checks label { white-space: nowrap; cursor: pointer; }
+.inline { font-size: 14px; font-weight: 400; }
+
+.row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+
+.hidden { display: none !important; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid #d1d9e0; margin: 4px 0 16px; }
+.tab {
+  background: none;
+  border: none;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #656d76;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab.active { color: #1f2328; font-weight: 600; border-bottom-color: #1f883d; }
+
+.actions { display: flex; gap: 10px; margin-top: 8px; }
+
+button {
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid #d1d9e0;
+  background: #f6f8fa;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover { background: #eef1f4; }
+button.primary { background: #1f883d; border-color: #1f883d; color: #fff; font-weight: 600; }
+button.primary:hover { background: #1a7f37; }
+button.danger { color: #d1242f; }
+button.danger:hover { background: #d1242f; border-color: #d1242f; color: #fff; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.error { color: #d1242f; font-size: 14px; margin: 10px 0 0; }
+.status { font-size: 14px; margin: 8px 0 0; }
+.status.ok { color: #1a7f37; }
+.status.fail { color: #d1242f; }
+
+section { margin-top: 24px; }
+
+.calendar {
+  background: #fff;
+  border: 1px solid #d1d9e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.cal-title { font-weight: 600; font-size: 14px; margin-bottom: 10px; }
+
+.months {
+  position: relative;
+  height: 16px;
+  margin-left: var(--labels-width);
+  font-size: 11px;
+  color: #656d76;
+}
+.months span { position: absolute; top: 0; white-space: nowrap; }
+
+.cal-grid { display: flex; }
+.wd-labels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: var(--labels-width);
+  font-size: 11px;
+  color: #656d76;
+}
+.wd { height: var(--cell); line-height: var(--cell); }
+
+.weeks { display: flex; gap: var(--gap); }
+.week { display: flex; flex-direction: column; gap: var(--gap); }
+.day {
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 2px;
+  background: #ebedf0;
+}
+.day.blank { visibility: hidden; }
+.day[data-level="1"] { background: #9be9a8; }
+.day[data-level="2"] { background: #40c463; }
+.day[data-level="3"] { background: #30a14e; }
+.day[data-level="4"] { background: #216e39; }
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  font-size: 11px;
+  color: #656d76;
+  margin-top: 8px;
+}
+.legend .day { display: inline-block; }
+
+#job-log {
+  background: #0d1117;
+  color: #d1d9e0;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

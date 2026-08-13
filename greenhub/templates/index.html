@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>greenhub</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main>
+  <h1>greenhub</h1>
+  <p class="muted">Генератор коммитов для таймлайна GitHub</p>
+
+  <section class="card">
+    <label class="field">
+      <span>URL репозитория</span>
+      <input id="repo" type="text" placeholder="https://github.com/user/repo.git" autocomplete="off" spellcheck="false">
+    </label>
+
+    <label class="field">
+      <span>Токен</span>
+      <input id="token" type="password" placeholder="github_pat_…" autocomplete="off">
+    </label>
+
+    <div class="field">
+      <div class="row">
+        <button id="check-btn" type="button">Проверить доступность репозитория</button>
+        <button id="clear-btn" type="button" class="danger">Очистить репозиторий</button>
+      </div>
+      <p id="repo-status" class="status hidden"></p>
+    </div>
+
+    <div class="field">
+      <span>Языки</span>
+      <div class="checks" id="languages">
+        {% for lang in languages %}
+        <label><input type="checkbox" value="{{ lang }}" checked> {{ lang }}</label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="field">
+      <span>Коммиты в день</span>
+      <label class="inline"><input id="random" type="checkbox" checked> случайное число</label>
+      <div class="row" id="random-range">
+        от <input id="min-commits" type="number" min="1" max="98" value="1">
+        до <input id="max-commits" type="number" min="2" max="99" value="5">
+      </div>
+      <div class="row hidden" id="fixed-count">
+        <input id="commits" type="number" min="1" max="99" value="1">
+      </div>
+    </div>
+
+    <label class="field">
+      <span>Дата начала</span>
+      <input id="start-date" type="date">
+    </label>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="fill" type="button">Заполнение</button>
+      <button class="tab" data-tab="text" type="button">Текст</button>
+    </div>
+
+    <div id="tab-fill">
+      <label class="field">
+        <span>Дата окончания</span>
+        <input id="end-date" type="date">
+      </label>
+      <div class="field">
+        <span>Дни недели</span>
+        <div class="checks" id="weekdays">
+          <label><input type="checkbox" value="0" checked> вс</label>
+          <label><input type="checkbox" value="1" checked> пн</label>
+          <label><input type="checkbox" value="2" checked> вт</label>
+          <label><input type="checkbox" value="3" checked> ср</label>
+          <label><input type="checkbox" value="4" checked> чт</label>
+          <label><input type="checkbox" value="5" checked> пт</label>
+          <label><input type="checkbox" value="6" checked> сб</label>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-text" class="hidden">
+      <label class="field">
+        <span>Текст (английские буквы и цифры, до 1000 символов)</span>
+        <input id="text" type="text" maxlength="1000" value="Welcome" spellcheck="false">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="preview-btn" type="button">Превью</button>
+      <button id="push-btn" type="button" class="primary">Пушим коммиты</button>
+    </div>
+    <p id="form-error" class="error hidden"></p>
+  </section>
+
+  <section id="preview" class="hidden">
+    <h2 id="preview-title"></h2>
+    <div id="calendars"></div>
+  </section>
+
+  <section id="job" class="hidden">
+    <h2 id="job-title">Пушим коммиты…</h2>
+    <pre id="job-log"></pre>
+  </section>
+</main>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

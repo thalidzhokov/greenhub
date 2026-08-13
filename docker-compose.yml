@@ -3,12 +3,5 @@ services:
     build:
       context: .
       dockerfile: greenhub/Dockerfile
-    env_file:
-      - .env
-    volumes:
-      - repo:/repo
     ports:
       - 8087:80
-
-volumes:
-  repo:
