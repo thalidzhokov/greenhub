@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY glyphs.txt ./
+COPY fonts/ fonts/
 COPY snippets/ snippets/
 COPY greenhub/ greenhub/
 

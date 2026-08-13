@@ -27,6 +27,7 @@ h2 { font-size: 17px; }
   border-radius: 8px;
   padding: 20px;
 }
+.card h2 { margin: 0 0 16px; }
 
 .field { display: block; margin-bottom: 16px; }
 .field > span { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -34,7 +35,8 @@ h2 { font-size: 17px; }
 input[type="text"],
 input[type="password"],
 input[type="date"],
-input[type="number"] {
+input[type="number"],
+select {
   padding: 6px 10px;
   border: 1px solid #d1d9e0;
   border-radius: 6px;
@@ -85,9 +87,16 @@ button.danger:hover { background: #d1242f; border-color: #d1242f; color: #fff; }
 button:disabled { opacity: 0.5; cursor: default; }
 
 .error { color: #d1242f; font-size: 14px; margin: 10px 0 0; }
-.status { font-size: 14px; margin: 8px 0 0; }
-.status.ok { color: #1a7f37; }
-.status.fail { color: #d1242f; }
+
+.hint { margin-top: 8px; font-size: 12.5px; color: #656d76; max-width: 640px; }
+.hint summary { cursor: pointer; user-select: none; }
+.hint summary:hover { color: #1f2328; }
+.hint p { margin: 8px 0 4px; }
+.hint ol { margin: 4px 0; padding-left: 20px; }
+.hint ul { margin: 2px 0 6px; padding-left: 18px; }
+.hint li { margin: 2px 0; }
+.hint a { color: #0969da; }
+.hint code { font-size: 12px; background: #f6f8fa; border: 1px solid #d1d9e0; border-radius: 4px; padding: 1px 4px; }
 
 section { margin-top: 24px; }
 
@@ -135,6 +144,22 @@ section { margin-top: 24px; }
 .day[data-level="3"] { background: #30a14e; }
 .day[data-level="4"] { background: #216e39; }
 
+.font-preview {
+  --cell: 5px;
+  --gap: 1.5px;
+  display: flex;
+  gap: var(--gap);
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #d1d9e0;
+  border-radius: 6px;
+  overflow-x: auto;
+  min-height: calc(7 * var(--cell) + 6 * var(--gap) + 20px);
+  align-items: center;
+  font-size: 13px;
+}
+.font-preview .error-inline { color: #d1242f; }
+
 .legend {
   display: flex;
   align-items: center;
@@ -146,11 +171,14 @@ section { margin-top: 24px; }
 }
 .legend .day { display: inline-block; }
 
-#job-log {
+.job { margin-top: 16px; }
+
+.job-log {
   background: #0d1117;
   color: #d1d9e0;
   border-radius: 8px;
   padding: 14px;
+  margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
   max-height: 320px;

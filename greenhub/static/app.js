@@ -48,8 +48,65 @@ document.querySelectorAll(".tab").forEach((tab) => {
     currentTab = tab.dataset.tab;
     $("tab-fill").classList.toggle("hidden", currentTab !== "fill");
     $("tab-text").classList.toggle("hidden", currentTab !== "text");
+    saveForm();
   });
 });
+
+// --- превью шрифта ---
+
+let fontPreviewTimer;
+
+async function updateFontPreview() {
+  const box = $("font-preview");
+  const text = $("text").value.trim();
+  if (!text) {
+    box.innerHTML = "";
+    return;
+  }
+  try {
+    const data = await postJSON("/api/font-preview", { text, font: $("font").value });
+    box.innerHTML = "";
+    for (const column of data.columns) {
+      const week = el("div", "week");
+      for (const filled of column) {
+        const cell = el("span", "day");
+        if (filled) cell.dataset.level = 4;
+        week.append(cell);
+      }
+      box.append(week);
+    }
+  } catch (exc) {
+    box.innerHTML = "";
+    box.append(el("span", "error-inline", exc.message));
+  }
+}
+
+$("font").addEventListener("change", updateFontPreview);
+$("text").addEventListener("input", () => {
+  clearTimeout(fontPreviewTimer);
+  fontPreviewTimer = setTimeout(updateFontPreview, 300);
+});
+
+// --- состояние кнопок ---
+
+let running = false;
+let repoVerified = false; // репозиторий успешно проверен для текущих URL и токена
+
+function updateButtons() {
+  const hasCreds = $("repo").value.trim() && $("token").value.trim();
+  $("preview-btn").disabled = running;
+  $("check-btn").disabled = running || !hasCreds;
+  $("clear-btn").disabled = running || !repoVerified;
+  $("push-btn").disabled = running || !repoVerified;
+}
+
+for (const id of ["repo", "token"]) {
+  $(id).addEventListener("input", () => {
+    repoVerified = false;
+    updateButtons();
+  });
+}
+updateButtons();
 
 function showError(message) {
   const node = $("form-error");
@@ -81,6 +138,7 @@ function collectParams() {
     params.weekdays = [...document.querySelectorAll("#weekdays input:checked")].map((i) => Number(i.value));
   } else {
     params.text = $("text").value;
+    params.font = $("font").value;
   }
   return params;
 }
@@ -183,15 +241,16 @@ function renderPreview(data) {
   const first = fromIso(dates[0]);
   const last = fromIso(dates[dates.length - 1]);
   const spanDays = (last - first) / 86400000;
+  const today = new Date();
 
-  if (spanDays <= 371) {
-    // диапазон до года — один календарь «последний год», как на профиле GitHub
-    const today = new Date();
+  if (spanDays <= 371 && last <= today) {
+    // диапазон до года в прошлом — один календарь «последний год», как на профиле GitHub
     const rollingStart = new Date(today);
     rollingStart.setDate(rollingStart.getDate() - 364);
     const gridFirst = first < rollingStart ? first : rollingStart;
     container.append(buildCalendar(gridFirst, today, days, maxCount, "Последний год"));
   } else {
+    // план шире года или уходит в будущее — отдельный календарь на каждый год
     for (let year = first.getFullYear(); year <= last.getFullYear(); year++) {
       const yearTotal = dates
         .filter((d) => Number(d.slice(0, 4)) === year)
@@ -222,22 +281,20 @@ $("preview-btn").addEventListener("click", async () => {
 
 // --- пуш ---
 
-function setRunning(running) {
-  for (const id of ["preview-btn", "push-btn", "check-btn", "clear-btn"]) {
-    $(id).disabled = running;
-  }
+function setRunning(value) {
+  running = value;
+  updateButtons();
 }
 
-function startJobUI(jobId, title, doneTitle) {
-  $("job").classList.remove("hidden");
-  $("job-title").textContent = title;
-  $("job-log").textContent = "";
+function startJobUI(panel, jobId, title) {
+  $(panel).classList.remove("hidden");
+  $(`${panel}-log`).textContent = title;
   setRunning(true);
-  pollJob(jobId, doneTitle);
+  pollJob(panel, jobId);
 }
 
-async function pollJob(jobId, doneTitle) {
-  const logEl = $("job-log");
+async function pollJob(panel, jobId) {
+  const logEl = $(`${panel}-log`);
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     let job;
@@ -246,14 +303,15 @@ async function pollJob(jobId, doneTitle) {
       job = await resp.json();
       if (!resp.ok) throw new Error(job.error || `HTTP ${resp.status}`);
     } catch (exc) {
-      $("job-title").textContent = "Потеряна связь с сервером";
+      logEl.textContent += "\nПотеряна связь с сервером";
       setRunning(false);
       return;
     }
-    logEl.textContent = job.log.join("\n");
-    logEl.scrollTop = logEl.scrollHeight;
+    if (job.log.length) {
+      logEl.textContent = job.log.join("\n");
+      logEl.scrollTop = logEl.scrollHeight;
+    }
     if (job.status !== "running") {
-      $("job-title").textContent = job.status === "done" ? doneTitle(job) : "Ошибка";
       setRunning(false);
       return;
     }
@@ -270,7 +328,7 @@ $("push-btn").addEventListener("click", async () => {
   if (!confirm(`${estimate}.\nПушим в ${params.repo || "репозиторий"}?`)) return;
   try {
     const { job } = await postJSON("/api/push", params);
-    startJobUI(job, "Пушим коммиты…", (j) => `Готово: ${j.created} ${plural(j.created, COMMIT_FORMS)}`);
+    startJobUI("push-job", job, "Пушим коммиты…");
   } catch (exc) {
     showError(exc.message);
   }
@@ -278,23 +336,23 @@ $("push-btn").addEventListener("click", async () => {
 
 // --- проверка и очистка репозитория ---
 
-function repoStatus(ok, message) {
-  const node = $("repo-status");
-  node.className = `status ${ok ? "ok" : "fail"}`;
-  node.textContent = message;
-}
-
 $("check-btn").addEventListener("click", async () => {
-  repoStatus(true, "Проверяем…");
+  const logEl = $("repo-job-log");
+  $("repo-job").classList.remove("hidden");
+  logEl.textContent = `Проверяем ${$("repo").value.trim()}`;
+  $("check-btn").disabled = true;
   try {
     const data = await postJSON("/api/check", {
       repo: $("repo").value.trim(),
       token: $("token").value.trim(),
     });
-    repoStatus(true, data.message);
+    logEl.textContent += `\n${data.message}`;
+    repoVerified = true;
   } catch (exc) {
-    repoStatus(false, exc.message);
+    logEl.textContent += `\nОшибка: ${exc.message}`;
+    repoVerified = false;
   }
+  updateButtons();
 });
 
 $("clear-btn").addEventListener("click", async () => {
@@ -305,8 +363,59 @@ $("clear-btn").addEventListener("click", async () => {
       repo,
       token: $("token").value.trim(),
     });
-    startJobUI(job, "Очищаем репозиторий…", () => "Репозиторий очищен");
+    startJobUI("repo-job", job, "Очищаем репозиторий…");
   } catch (exc) {
     showError(exc.message);
   }
 });
+
+// --- сохранение формы между перезагрузками страницы ---
+
+const STORAGE_KEY = "greenhub-form";
+const TEXT_FIELDS = ["repo", "token", "min-commits", "max-commits", "commits", "start-date", "end-date", "text"];
+
+const checkStates = (containerId) =>
+  Object.fromEntries(
+    [...document.querySelectorAll(`#${containerId} input`)].map((i) => [i.value, i.checked])
+  );
+
+function saveForm() {
+  const state = {
+    fields: Object.fromEntries(TEXT_FIELDS.map((id) => [id, $(id).value])),
+    random: $("random").checked,
+    font: $("font").value,
+    languages: checkStates("languages"),
+    weekdays: checkStates("weekdays"),
+    tab: currentTab,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function restoreForm() {
+  let state;
+  try {
+    state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return;
+  }
+  if (!state) return;
+  for (const [id, value] of Object.entries(state.fields || {})) {
+    const input = $(id);
+    if (input && typeof value === "string") input.value = value;
+  }
+  $("random").checked = state.random ?? true;
+  $("random").dispatchEvent(new Event("change"));
+  if ([...$("font").options].some((o) => o.value === state.font)) $("font").value = state.font;
+  for (const [containerId, saved] of [["languages", state.languages], ["weekdays", state.weekdays]]) {
+    for (const input of document.querySelectorAll(`#${containerId} input`)) {
+      if (saved && input.value in saved) input.checked = saved[input.value];
+    }
+  }
+  if (state.tab === "text") document.querySelector('.tab[data-tab="text"]').click();
+}
+
+restoreForm();
+updateButtons();
+updateFontPreview();
+document.addEventListener("input", saveForm);
+document.addEventListener("change", saveForm);

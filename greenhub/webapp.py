@@ -9,12 +9,15 @@ from datetime import date
 from flask import Flask, jsonify, render_template, request
 
 import core
+from font import FONTS_DIR, available_fonts, load_font, render_text
 from snippets import LANGUAGES
 
 app = Flask(__name__)
 
 MAX_COMMITS = 99
 MAX_TEXT_LEN = 1000
+FONTS = available_fonts()
+DEFAULT_FONT = "5x7-pixel-slanted"
 
 JOBS: dict[str, dict] = {}
 
@@ -103,31 +106,61 @@ def validate(payload: dict, need_repo: bool) -> tuple[dict | None, str | None]:
         if not 1 <= len(text) <= MAX_TEXT_LEN:
             return None, f"Текст: от 1 до {MAX_TEXT_LEN} символов"
         params["text"] = text
+        font = str(payload.get("font", DEFAULT_FONT))
+        if font not in FONTS:
+            return None, f"Неизвестный шрифт: {font}"
+        params["font"] = font
     else:
         return None, "Неизвестный режим"
     return params, None
 
 
 def make_targets(params: dict, rnd: random.Random) -> dict[date, int]:
+    # в режиме текста даты могут уходить в будущее: эти клетки
+    # закрасятся на таймлайне, когда наступят соответствующие дни
     if params["mode"] == "text":
-        targets = core.text_targets(
-            params["text"], params["start"], params["low"], params["high"], rnd
-        )
-    else:
-        targets = core.fill_targets(
+        return core.text_targets(
+            params["text"],
             params["start"],
-            params["end"],
-            params["weekdays"],
             params["low"],
             params["high"],
             rnd,
+            params["font"],
         )
-    return core.cap_today(targets)
+    return core.fill_targets(
+        params["start"],
+        params["end"],
+        params["weekdays"],
+        params["low"],
+        params["high"],
+        rnd,
+    )
 
 
 @app.get("/")
 def index():
-    return render_template("index.html", languages=sorted(LANGUAGES))
+    return render_template(
+        "index.html",
+        languages=sorted(LANGUAGES),
+        fonts=FONTS,
+        default_font=DEFAULT_FONT,
+    )
+
+
+@app.post("/api/font-preview")
+def font_preview():
+    payload = request.get_json(silent=True) or {}
+    font = str(payload.get("font", DEFAULT_FONT))
+    if font not in FONTS:
+        return jsonify({"error": f"Неизвестный шрифт: {font}"}), 400
+    text = str(payload.get("text", "")).strip()
+    if not 1 <= len(text) <= MAX_TEXT_LEN:
+        return jsonify({"error": f"Текст: от 1 до {MAX_TEXT_LEN} символов"}), 400
+    try:
+        columns = render_text(text, load_font(FONTS_DIR / f"{font}.txt"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"columns": columns})
 
 
 @app.post("/api/preview")

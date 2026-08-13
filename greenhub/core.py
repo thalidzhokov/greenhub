@@ -11,10 +11,9 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from font import load_font, render_text
+from font import FONTS_DIR, load_font, render_text
 from snippets import LANGUAGES
 
-GLYPHS_PATH = Path(__file__).resolve().parent.parent / "glyphs.txt"
 # GitHub индексирует для графа контрибуций не более ~1000 коммитов за один пуш,
 # лишние теряются безвозвратно — пушим партиями с запасом
 PUSH_BATCH = 500
@@ -118,12 +117,12 @@ def configure_git_user(repo: str, token: str, log: Log) -> None:
 
 
 def text_targets(
-    text: str, start: date, low: int, high: int, rnd: random.Random
+    text: str, start: date, low: int, high: int, rnd: random.Random, font_id: str
 ) -> dict[date, int]:
     """Накладывает маску текста на календарь, начиная с недели даты start."""
     # вперёд к ближайшему воскресенью (началу колонки таймлайна)
     week_start = start + timedelta(days=(7 - (start.weekday() + 1) % 7) % 7)
-    columns = render_text(text, load_font(GLYPHS_PATH))
+    columns = render_text(text, load_font(FONTS_DIR / f"{font_id}.txt"))
     return {
         week_start + timedelta(weeks=week, days=day): rnd.randint(low, high)
         for week, column in enumerate(columns)
@@ -141,12 +140,6 @@ def fill_targets(
         for i in range((end - start).days + 1)
         if (day := start + timedelta(days=i)).weekday() in weekdays
     }
-
-
-def cap_today(targets: dict[date, int]) -> dict[date, int]:
-    """Отбрасывает даты в будущем — GitHub их всё равно не показывает."""
-    today = date.today()
-    return {day: count for day, count in targets.items() if day <= today}
 
 
 def existing_commits(repo: str) -> Counter[date]:

@@ -1,6 +1,8 @@
-"""Пиксельный шрифт: парсинг glyphs.txt и рендер текста в колонки таймлайна."""
+"""Пиксельные шрифты: парсинг файлов глифов и рендер текста в колонки таймлайна."""
 
 from pathlib import Path
+
+FONTS_DIR = Path(__file__).resolve().parent.parent / "fonts"
 
 ROWS = 7  # дней в неделе, вс-сб
 CHAR_GAP = 1  # пустых недель между символами
@@ -8,6 +10,16 @@ WORD_GAP = 2  # пустых недель между словами
 
 Glyph = list[str]  # 7 строк из '#' и '.'
 Column = list[bool]  # 7 клеток одной недели, вс-сб
+
+
+def available_fonts() -> dict[str, str]:
+    """Шрифты из fonts/: id (имя файла без .txt) -> отображаемое имя."""
+    fonts = {}
+    for path in sorted(FONTS_DIR.glob("*.txt")):
+        first_line = path.read_text(encoding="utf-8").splitlines()[0]
+        name = first_line.removeprefix("name:").strip()
+        fonts[path.stem] = name or path.stem
+    return fonts
 
 
 def load_font(path: Path) -> dict[str, Glyph]:

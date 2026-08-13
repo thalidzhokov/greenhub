@@ -12,23 +12,63 @@
   <p class="muted">Генератор коммитов для таймлайна GitHub</p>
 
   <section class="card">
-    <label class="field">
+    <h2>Репозиторий</h2>
+
+    <div class="field">
       <span>URL репозитория</span>
       <input id="repo" type="text" placeholder="https://github.com/user/repo.git" autocomplete="off" spellcheck="false">
-    </label>
+      <details class="hint">
+        <summary>Какой репозиторий указать?</summary>
+        <p>
+          Лучше создать отдельный новый репозиторий на своём аккаунте — сюда будут заливаться
+          сгенерированные коммиты, напр., <code>https://github.com/thalidzhokov/greenhub-repo.git</code>.
+          Создать репозиторий можно по ссылке <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>.
+        </p>
+        <p>
+          Чтобы коммиты попадали на таймлайн, репозиторий должен быть публичным или в профиле включён показ приватных контрибуций.
+        </p>
+      </details>
+    </div>
 
-    <label class="field">
+    <div class="field">
       <span>Токен</span>
       <input id="token" type="password" placeholder="github_pat_…" autocomplete="off">
-    </label>
+      <details class="hint">
+        <summary>Как получить токен?</summary>
+        <p>Нужен Personal Access Token (PAT) — токен создаётся в настройках вашего аккаунта GitHub. Есть два варианта:</p>
+        <ol>
+          <li>
+            <strong>Fine-grained PAT (рекомендуется):</strong>
+            <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> → Generate new token.
+            Настройки:
+            <ul>
+              <li>Repository access — Only select repositories, выбрать репозиторий для коммитов (напр., greenhub-repo);</li>
+              <li>Permissions → Repository permissions → Contents: Read and write — это единственное нужное разрешение.</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Classic PAT:</strong>
+            <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a> → Generate new token (classic) → scope repo.
+            Минус — даёт доступ ко всем вашим репозиториям сразу.
+          </li>
+        </ol>
+      </details>
+    </div>
 
     <div class="field">
       <div class="row">
-        <button id="check-btn" type="button">Проверить доступность репозитория</button>
-        <button id="clear-btn" type="button" class="danger">Очистить репозиторий</button>
+        <button id="check-btn" type="button" disabled>Проверить доступность репозитория</button>
+        <button id="clear-btn" type="button" class="danger" disabled>Очистить репозиторий</button>
       </div>
-      <p id="repo-status" class="status hidden"></p>
     </div>
+
+    <div id="repo-job" class="job hidden">
+      <pre id="repo-job-log" class="job-log"></pre>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Таймлайн</h2>
 
     <div class="field">
       <span>Языки</span>
@@ -37,6 +77,14 @@
         <label><input type="checkbox" value="{{ lang }}" checked> {{ lang }}</label>
         {% endfor %}
       </div>
+      <details class="hint">
+        <summary>Что дают языки?</summary>
+        <p>
+          Каждый коммит добавляет файл со сниппетом кода на одном из отмеченных языков - из них складывается статистика Languages в профиле GitHub. Выбирается наименее заполненный язык, чтобы все отмеченные имели равный вес.
+          Подробнее о том, как GitHub определяет языки, можно узнать по ссылке
+          <a href="https://docs.github.com/en/get-started/learning-about-github/github-language-support" target="_blank" rel="noopener">github-language-support</a>.
+        </p>
+      </details>
     </div>
 
     <div class="field">
@@ -85,23 +133,34 @@
         <span>Текст (английские буквы и цифры, до 1000 символов)</span>
         <input id="text" type="text" maxlength="1000" value="Welcome" spellcheck="false">
       </label>
+      <label class="field">
+        <span>Шрифт</span>
+        <select id="font">
+          {% for id, name in fonts.items() %}
+          <option value="{{ id }}"{% if id == default_font %} selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="field">
+        <span>Превью шрифта</span>
+        <div id="font-preview" class="font-preview"></div>
+      </div>
     </div>
 
     <div class="actions">
       <button id="preview-btn" type="button">Превью</button>
-      <button id="push-btn" type="button" class="primary">Пушим коммиты</button>
+      <button id="push-btn" type="button" class="primary" disabled>Пушим коммиты</button>
     </div>
     <p id="form-error" class="error hidden"></p>
+
+    <div id="push-job" class="job hidden">
+      <pre id="push-job-log" class="job-log"></pre>
+    </div>
   </section>
 
   <section id="preview" class="hidden">
     <h2 id="preview-title"></h2>
     <div id="calendars"></div>
-  </section>
-
-  <section id="job" class="hidden">
-    <h2 id="job-title">Пушим коммиты…</h2>
-    <pre id="job-log"></pre>
   </section>
 </main>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
