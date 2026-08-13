@@ -179,7 +179,7 @@ def validate(
 
 
 def achievements_params(
-    payload: dict[str, Any]
+    payload: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Параметры блока ачивок: галочки, тиры и источники соавторов."""
     quickdraw = bool(payload.get("ach_quickdraw"))
@@ -191,11 +191,16 @@ def achievements_params(
     if pair_tier and pair_tier not in achievements.PAIR_TIERS:
         return None, f"Неизвестный тир Pair Extraordinaire: {pair_tier}"
     raw_friends = str(payload.get("ach_friends", ""))
-    friends = [login.strip().lstrip("@") for login in raw_friends.split(",") if login.strip()]
+    friends = [
+        login.strip().lstrip("@") for login in raw_friends.split(",") if login.strip()
+    ]
     use_bots = bool(payload.get("ach_bots"))
     use_celebs = bool(payload.get("ach_celebs"))
     if pair_tier and not (friends or use_bots or use_celebs):
-        return None, "Для Pair Extraordinaire выберите источник соавторов: знакомые, сервисные аккаунты или знаменитости"
+        return (
+            None,
+            "Для Pair Extraordinaire выберите источник соавторов: знакомые, сервисные аккаунты или знаменитости",
+        )
     if not (quickdraw or yolo or shark_tier or pair_tier):
         return None, None
     params: dict[str, Any] = {
@@ -318,6 +323,7 @@ def push():
         targets = make_targets(params, random.Random())
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
     def job(log: core.Log) -> int:
         def push_timeline() -> int:
             return core.run_push(
@@ -333,9 +339,7 @@ def push():
         _, heads = core.ls_remote(params["repo"], params["token"])
         if heads == 0:
             created = push_timeline()
-            achievements.run_achievements(
-                params["repo"], params["token"], ach, log
-            )
+            achievements.run_achievements(params["repo"], params["token"], ach, log)
             return created
         achievements.run_achievements(params["repo"], params["token"], ach, log)
         return push_timeline()

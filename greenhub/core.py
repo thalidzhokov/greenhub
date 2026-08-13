@@ -88,7 +88,14 @@ def run_clear(url: str, token: str, log: Log) -> None:
         git(tmp, "config", "user.name", "greenhub")
         git(tmp, "config", "user.email", "greenhub@localhost")
         git(tmp, "commit", "-q", "--allow-empty", "-m", "Clear repository")
-        git(tmp, "push", "-q", "--force", _auth_url(url, token), f"HEAD:refs/heads/{branch}")
+        git(
+            tmp,
+            "push",
+            "-q",
+            "--force",
+            _auth_url(url, token),
+            f"HEAD:refs/heads/{branch}",
+        )
     log(f"История ветки {branch} заменена одним пустым коммитом")
     log("Таймлайн GitHub пересчитается в течение нескольких минут")
 

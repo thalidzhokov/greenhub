@@ -16,6 +16,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
+from typing import Any, cast
 
 import core
 
@@ -117,7 +118,7 @@ def api(
     method: str,
     path: str,
     token: str,
-    payload: dict | None = None,
+    payload: dict[str, object] | None = None,
     ignore_errors: bool = False,
 ) -> tuple[int, object]:
     request = urllib.request.Request(
@@ -143,14 +144,16 @@ def api(
         raise ApiError(f"GitHub API {method} {path}: {exc.reason}") from None
 
 
-def api_json(method: str, path: str, token: str, payload: dict | None = None) -> dict:
+def api_json(
+    method: str, path: str, token: str, payload: dict[str, object] | None = None
+) -> dict[str, Any]:
     status, data = api(method, path, token, payload)
     if not isinstance(data, dict):
         raise ApiError(f"GitHub API {method} {path}: неожиданный ответ ({status})")
-    return data
+    return cast(dict[str, Any], data)
 
 
-def current_user(token: str) -> dict:
+def current_user(token: str) -> dict[str, Any]:
     user = api_json("GET", "/user", token)
     return {"login": user["login"], "name": user.get("name") or user["login"]}
 
@@ -166,12 +169,15 @@ def merged_prs(owner: str, name: str, token: str) -> int:
     return int(data.get("total_count", 0))
 
 
-def validate_login(login: str, author_login: str, token: str, log: Log) -> dict | None:
+def validate_login(
+    login: str, author_login: str, token: str, log: Log
+) -> dict[str, Any] | None:
     """Проверяет соавтора через API; возвращает его данные или None с причиной в логе."""
-    status, user = api("GET", f"/users/{login}", token)
-    if status != 200 or not isinstance(user, dict):
+    status, data = api("GET", f"/users/{login}", token)
+    if status != 200 or not isinstance(data, dict):
         log(f"Соавтор {login}: аккаунт не найден, пропускаем")
         return None
+    user = cast(dict[str, Any], data)
     if user.get("type") != "User":
         log(
             f"Соавтор {login}: это {user.get('type')}, соавторство не засчитается, пропускаем"
@@ -190,7 +196,7 @@ def resolve_coauthors(
     author_login: str,
     token: str,
     log: Log,
-) -> tuple[list[str], list[str], dict[str, dict]]:
+) -> tuple[list[str], list[str], dict[str, dict[str, Any]]]:
     """Очередь соавторов: (одиночные, пул, данные аккаунтов).
 
     Одиночные — владелец сервиса (первый коммит, один раз) и знакомые,
@@ -203,7 +209,7 @@ def resolve_coauthors(
 
     seen: set[str] = set()
     singles: list[str] = []
-    info: dict[str, dict] = {}
+    info: dict[str, dict[str, Any]] = {}
     for login in [OWNER_COAUTHOR, *[f.strip().lstrip("@") for f in friends]]:
         if not login or login.lower() in seen:
             continue
@@ -300,10 +306,11 @@ def readme_commit(owner: str, name: str, branch: str, token: str, message: str) 
     )
     content, sha = "", None
     if status == 200 and isinstance(info, dict) and "sha" in info:
-        content = base64.b64decode(info["content"]).decode()
-        sha = info["sha"]
+        readme = cast(dict[str, Any], info)
+        content = base64.b64decode(readme["content"]).decode()
+        sha = readme["sha"]
     marker = f"{date.today().isoformat()} {random.getrandbits(64):016x}"
-    payload: dict = {
+    payload: dict[str, object] = {
         "message": message,
         "content": base64.b64encode(f"{content}\n- {marker}\n".encode()).decode(),
         "branch": branch,
@@ -369,12 +376,11 @@ def run_pull_shark(repo_url: str, token: str, need: int, log: Log) -> int:
 
 
 def has_open_pair_pr(owner: str, name: str, token: str) -> bool:
-    status, data = api(
-        "GET", f"/repos/{owner}/{name}/pulls?state=open&per_page=100", token
-    )
-    return isinstance(data, list) and any(
-        str(pr.get("title", "")).startswith("Pair ") for pr in data
-    )
+    _, data = api("GET", f"/repos/{owner}/{name}/pulls?state=open&per_page=100", token)
+    if not isinstance(data, list):
+        return False
+    prs = cast(list[dict[str, Any]], data)
+    return any(str(pr.get("title", "")).startswith("Pair ") for pr in prs)
 
 
 def run_pair(
@@ -408,7 +414,9 @@ def run_pair(
         user = info[login]
         # в имени соавтора может оказаться перевод строки — ломал бы формат трейлера
         display = str(user.get("name") or login).replace("\n", " ").strip()
-        return f"Co-authored-by: {display} <{user['id']}+{login}@users.noreply.github.com>"
+        return (
+            f"Co-authored-by: {display} <{user['id']}+{login}@users.noreply.github.com>"
+        )
 
     base = default_branch(owner, name, token)
     created = 0
@@ -446,10 +454,10 @@ def run_pair(
     return created
 
 
-def plan(params: dict, repo_url: str, token: str, log: Log) -> dict:
+def plan(params: dict[str, Any], repo_url: str, token: str, log: Log) -> dict[str, Any]:
     """Собирает параметры прогона в план: что и сколько делать."""
     owner, name = owner_repo(repo_url)
-    plan_: dict = {
+    plan_: dict[str, Any] = {
         "quickdraw": params["quickdraw"],
         "yolo": params["yolo"],
         "friends": params.get("friends", []),
@@ -477,7 +485,9 @@ def plan(params: dict, repo_url: str, token: str, log: Log) -> dict:
     return plan_
 
 
-def run_achievements(repo_url: str, token: str, params: dict, log: Log) -> None:
+def run_achievements(
+    repo_url: str, token: str, params: dict[str, Any], log: Log
+) -> None:
     """Прогон ачивок по плану. YOLO выпадает само на первом же мерже."""
     owner, name = owner_repo(repo_url)
     plan_ = plan(params, repo_url, token, log)
